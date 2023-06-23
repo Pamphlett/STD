@@ -27,7 +27,7 @@ std::vector<float> read_lidar_data(const std::string lidar_data_path)
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "demo_kitti");
+    ros::init(argc, argv, "demo_ntu");
     ros::NodeHandle nh;
     std::string lidar_path = "";
     std::string pose_path = "";
@@ -57,8 +57,15 @@ int main(int argc, char **argv)
     ros::Rate slow_loop(10);
 
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> poses_vec;
-    std::vector<double> times_vec;
-    load_pose_with_time(pose_path, poses_vec, times_vec);
+    std::vector<std::string> times_vec;
+    std::vector<int> index_vec;
+    load_CSV_pose_with_time(pose_path, index_vec, poses_vec, times_vec);
+    // std::cout << std::setprecision(16);
+    // std::cout << "Loaded: " << index_vec[0] << " " << poses_vec[0].first << "
+    // "
+    //           << times_vec[0] << std::endl;
+    // return 0;
+    // load_pose_with_time(pose_path, poses_vec, times_vec);
     std::cout << "Sucessfully load pose with number: " << poses_vec.size()
               << std::endl;
 
@@ -75,6 +82,13 @@ int main(int argc, char **argv)
     int triggle_loop_num = 0;
     while (ros::ok())
     {
+        std::string ori_time_str = times_vec[cloudInd];
+        std::replace(ori_time_str.begin(), ori_time_str.end(), '.', '_');
+        std::string curr_lidar_path = lidar_path + "cloud_" +
+                                      std::to_string(index_vec[cloudInd]) +
+                                      "_" + ori_time_str + ".pcd";
+        std::cout << curr_lidar_path << std::endl;
+        return 0;
         std::stringstream lidar_data_path;
         lidar_data_path << lidar_path << std::setfill('0') << std::setw(6)
                         << cloudInd << ".bin";

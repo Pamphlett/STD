@@ -9,8 +9,8 @@
 		name="place_recognition_kitti" 
 		output="screen" 
 	/>
-  <param name="lidar_path" type="string" value = "/usb/kitti/sequences/00/velodyne/"/>
-  <param name="pose_path" type="string" value = "/usb2/kitti_bags/correct_pose/kitti00.txt"/>
+  <param name="lidar_path" type="string" value = "/home/database/KITTI_Benchmark/Odometry/data_odometry_velodyne/dataset/sequences/00/velodyne/"/>
+  <param name="pose_path" type="string" value = "/home/database/std_example/kitti00.txt"/>
 
   <group if="$(arg rviz)">
     <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find std_detector)/rviz_cfg/demo.rviz" />
