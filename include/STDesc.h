@@ -251,6 +251,36 @@ void load_CSV_pose_with_time(
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
     std::vector<std::string> &times_vec);
 
+/**
+ * @brief Read pose from a file (with 1*12 format)
+ *
+ * @param filepath
+ * @return std::vector<Eigen::Matrix4d,
+ * Eigen::aligned_allocator<Eigen::Matrix4d>>
+ */
+std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>
+load_poses_from_transform_matrix(const std::string filepath);
+
+/**
+ * @brief read files from a folder with certian suffix
+ *
+ * @param folderName
+ * @param file_list_extenstion
+ * @param extension
+ * @param fileNames
+ * @param frame_begin
+ * @param frame_end
+ * @param frame_step
+ * @return true
+ * @return false
+ */
+bool batch_read_filenames_in_folder(const std::string &folderName,
+                                    const std::string &file_list_extenstion,
+                                    const std::string &extension,
+                                    std::vector<std::string> &fileNames,
+                                    int frame_begin = 0, int frame_end = 99999,
+                                    int frame_step = 1);
+
 void read_parameters(ros::NodeHandle &nh, ConfigSetting &config_setting);
 
 double time_inc(std::chrono::_V2::system_clock::time_point &t_end,

@@ -228,6 +228,81 @@ void load_CSV_pose_with_time(
     }
 }
 
+std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>
+load_poses_from_transform_matrix(const std::string filepath)
+{
+    double tmp[12];
+    std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>
+        pose_vec;
+    Eigen::Matrix4d temp_pose = Eigen::Matrix4d::Identity();
+    std::ifstream posereader(filepath);
+
+    int count = 0;
+    while (posereader >> tmp[0])
+    {
+        for (int i = 1; i < 12; ++i)
+        {
+            posereader >> tmp[i];
+        }
+        for (int j = 0; j < 3; ++j)
+        {
+            for (int k = 0; k < 4; ++k)
+            {
+                temp_pose(j, k) = tmp[4 * j + k];
+            }
+        }
+
+        pose_vec.push_back(temp_pose);
+
+        count++;
+        // LOG(WARNING) << temp_pose;
+    }
+    return pose_vec;
+}
+
+bool batch_read_filenames_in_folder(const std::string &folderName,
+                                    const std::string &file_list_extenstion,
+                                    const std::string &extension,
+                                    std::vector<std::string> &fileNames,
+                                    int frame_begin, int frame_end,
+                                    int frame_step)
+{
+    std::string filename_list = folderName + file_list_extenstion;
+
+    // read image filename
+    std::ifstream name_list_file(filename_list.c_str(), std::ios::in);
+    if (!name_list_file.is_open())
+    {
+        LOG(WARNING) << "open filename_list failed, file is: " << filename_list;
+        return 0;
+    }
+
+    int frame_count = 0;
+
+    while (name_list_file.peek() != EOF)
+    {
+        std::string cur_file;
+        name_list_file >> cur_file;
+
+        // if (!cur_file.empty() &&
+        // !cur_file.substr(cur_file.rfind('.')).compare(extension))
+        if (!cur_file.empty())
+        {
+            if (frame_count >= frame_begin && frame_count <= frame_end &&
+                ((frame_count - frame_begin) % frame_step == 0))
+            {
+                cur_file = folderName + "/" + cur_file;
+                fileNames.push_back(cur_file);
+                // LOG(INFO) << "Record the file: [" << cur_file << "].";
+            }
+            frame_count++;
+        }
+    }
+    name_list_file.close();
+
+    return 1;
+}
+
 double time_inc(std::chrono::_V2::system_clock::time_point &t_end,
                 std::chrono::_V2::system_clock::time_point &t_begin)
 {
