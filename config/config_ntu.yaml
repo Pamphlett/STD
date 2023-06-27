@@ -20,7 +20,7 @@ non_max_suppression_radius: 2
 std_side_resolution: 0.2
 
 # candidate search
-skip_near_num: 50
+skip_near_num: 100
 candidate_num: 50
 sub_frame_num: 1
 vertex_diff_threshold: 0.5

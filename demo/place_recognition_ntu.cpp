@@ -41,8 +41,8 @@ int main(int argc, char **argv)
 
     ros::Publisher pubOdomAftMapped =
         nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_init", 10);
-    // ros::Publisher pubRegisterCloud =
-    //     nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100);
+    ros::Publisher pubRegisterCloud =
+        nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100);
     ros::Publisher pubCureentCloud =
         nh.advertise<sensor_msgs::PointCloud2>("/cloud_current", 100);
     ros::Publisher pubCurrentCorner =
@@ -57,17 +57,19 @@ int main(int argc, char **argv)
     ros::Rate loop(500);
     ros::Rate slow_loop(10);
 
-    // std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> poses_vec;
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> poses_vec;
     std::vector<std::string> times_vec;
     std::vector<int> index_vec;
-    std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>
-        poses_vec;
-    poses_vec = load_poses_from_transform_matrix(pose_path);
-    std::vector<std::string> scan_files;
-    batch_read_filenames_in_folder(lidar_path, "_filelist.txt", ".pcd",
-                                   scan_files);
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> key_poses_vec;
 
-    // load_CSV_pose_with_time(pose_path, index_vec, poses_vec, times_vec);
+    // std::vector<Eigen::Matrix4d, Eigen::aligned_allocator<Eigen::Matrix4d>>
+    //     poses_vec;
+    // poses_vec = load_poses_from_transform_matrix(pose_path);
+    // std::vector<std::string> scan_files;
+    // batch_read_filenames_in_folder(lidar_path, "_filelist.txt", ".pcd",
+    //                                scan_files);
+
+    load_CSV_pose_with_time(pose_path, index_vec, poses_vec, times_vec);
     // std::cout << std::setprecision(16);
     // std::cout << "Loaded: " << index_vec[0] << " " << poses_vec[0].first << "
     // "
@@ -79,6 +81,7 @@ int main(int argc, char **argv)
 
     STDescManager *std_manager = new STDescManager(config_setting);
 
+    size_t total_size = poses_vec.size();
     size_t cloudInd = 0;
     size_t keyCloudInd = 0;
     pcl::PointCloud<pcl::PointXYZI>::Ptr temp_cloud(
@@ -87,16 +90,23 @@ int main(int argc, char **argv)
     std::vector<double> descriptor_time;
     std::vector<double> querying_time;
     std::vector<double> update_time;
+    std::vector<double> t_error_vec;
+    std::vector<double> r_error_vec;
     int triggle_loop_num = 0;
     while (ros::ok())
     {
-        // std::string ori_time_str = times_vec[cloudInd];
-        // std::replace(ori_time_str.begin(), ori_time_str.end(), '.', '_');
-        // std::string curr_lidar_path = lidar_path + "cloud_" +
-        //                               std::to_string(cloudInd + 1) + "_" +
-        //                               ori_time_str + ".pcd";
+        if (cloudInd >= total_size)
+        {
+            break;
+        }
 
-        std::string curr_lidar_path = scan_files[cloudInd];
+        std::string ori_time_str = times_vec[cloudInd];
+        std::replace(ori_time_str.begin(), ori_time_str.end(), '.', '_');
+        std::string curr_lidar_path = lidar_path + "cloud_" +
+                                      std::to_string(cloudInd + 1) + "_" +
+                                      ori_time_str + ".pcd";
+
+        // std::string curr_lidar_path = scan_files[cloudInd];
 
         // std::stringstream lidar_data_path;
         // lidar_data_path << lidar_path << std::setfill('0') << std::setw(6)
@@ -108,8 +118,13 @@ int main(int argc, char **argv)
         // }
         pcl::PointCloud<pcl::PointXYZI>::Ptr current_cloud(
             new pcl::PointCloud<pcl::PointXYZI>());
-        Eigen::Vector3d translation = poses_vec[cloudInd].topRightCorner(3, 1);
-        Eigen::Matrix3d rotation = poses_vec[cloudInd].topLeftCorner(3, 3);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr gt_cloud(
+            new pcl::PointCloud<pcl::PointXYZI>());
+        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_registered(
+            new pcl::PointCloud<pcl::PointXYZI>());
+
+        Eigen::Vector3d translation = poses_vec[cloudInd].first;
+        Eigen::Matrix3d rotation = poses_vec[cloudInd].second;
         if (pcl::io::loadPCDFile<pcl::PointXYZI>(curr_lidar_path,
                                                  *current_cloud) == -1)
         {
@@ -119,8 +134,12 @@ int main(int argc, char **argv)
             return (-1);
         }
 
+        Eigen::Matrix4d curr_trans_matrix;
+        curr_trans_matrix.setIdentity();
+        curr_trans_matrix.topLeftCorner(3, 3) = rotation;
+        curr_trans_matrix.topRightCorner(3, 1) = translation;
         pcl::transformPointCloud<pcl::PointXYZI>(*current_cloud, *current_cloud,
-                                                 poses_vec[cloudInd]);
+                                                 curr_trans_matrix);
         // for (std::size_t i = 0; i < lidar_data.size(); i += 4)
         // {
         //     pcl::PointXYZI point;
@@ -165,9 +184,57 @@ int main(int argc, char **argv)
             }
             if (search_result.first > 0)
             {
+                std::cout << "Current Frame Num is:          " << cloudInd
+                          << std::endl;
                 std::cout << "[Loop Detection] triggle loop: " << keyCloudInd
                           << "--" << search_result.first
                           << ", score:" << search_result.second << std::endl;
+
+                // Compute Pose Estimation Error
+                int match_frame = search_result.first + 1;
+                std_manager->PlaneGeomrtricIcp(
+                    std_manager->plane_cloud_vec_.back(),
+                    std_manager->plane_cloud_vec_[match_frame], loop_transform);
+
+                // Eigen::Matrix4d estimated_trans_matrix;
+                // estimated_trans_matrix.setIdentity();
+                // estimated_trans_matrix.topLeftCorner(3, 3) =
+                //     loop_transform.second;
+                // estimated_trans_matrix.topRightCorner(3, 1) =
+                //     loop_transform.first;
+                // pcl::transformPointCloud<pcl::PointXYZI>(
+                //     *gt_cloud, *cloud_registered,
+                //     estimated_trans_matrix.cast<float>().inverse());
+
+                Eigen::Vector3d gt_translation =
+                    poses_vec[search_result.first + 1].first -
+                    poses_vec[cloudInd].first;
+                Eigen::Matrix3d gt_rotation =
+                    poses_vec[cloudInd].second.inverse() *
+                    poses_vec[search_result.first + 1].second;
+
+                // double t_e = (gt_translation - loop_transform.first).norm();
+                // double r_e =
+                //     std::abs(std::acos(fmin(
+                //         fmax(((loop_transform.second.inverse() * gt_rotation)
+                //                   .trace() -
+                //               1) /
+                //                  2,
+                //              -1.0),
+                //         1.0))) /
+                //     M_PI * 180;
+                double t_e = (loop_transform.first).norm();
+                double r_e =
+                    std::abs(std::acos(fmin(
+                        fmax(((loop_transform.second).trace() - 1) / 2, -1.0),
+                        1.0))) /
+                    M_PI * 180;
+                std::cout << "Estimated Translation Error is:  " << t_e << " m;"
+                          << std::endl;
+                std::cout << "Estimated Rotation Error is:     " << r_e
+                          << " degree;" << std::endl;
+                t_error_vec.push_back(t_e);
+                r_error_vec.push_back(r_e);
             }
             auto t_query_end = std::chrono::high_resolution_clock::now();
             querying_time.push_back(time_inc(t_query_end, t_query_begin));
@@ -192,6 +259,7 @@ int main(int argc, char **argv)
             save_key_cloud = *temp_cloud;
 
             std_manager->key_cloud_vec_.push_back(save_key_cloud.makeShared());
+            key_poses_vec.push_back(poses_vec[cloudInd]);
 
             // publish
 
@@ -211,6 +279,12 @@ int main(int argc, char **argv)
                 pub_cloud.header.frame_id = "camera_init";
                 pubMatchedCloud.publish(pub_cloud);
                 slow_loop.sleep();
+
+                pcl::toROSMsg(*cloud_registered, pub_cloud);
+                pub_cloud.header.frame_id = "camera_init";
+                pubRegisterCloud.publish(pub_cloud);
+                slow_loop.sleep();
+
                 pcl::toROSMsg(
                     *std_manager->corner_cloud_vec_[search_result.first],
                     pub_cloud);
@@ -247,6 +321,12 @@ int main(int argc, char **argv)
     double mean_update_time =
         std::accumulate(update_time.begin(), update_time.end(), 0) * 1.0 /
         update_time.size();
+    double mean_translation_error =
+        std::accumulate(t_error_vec.begin(), t_error_vec.end(), 0) * 1.0 /
+        t_error_vec.size();
+    double mean_rotation_error =
+        std::accumulate(r_error_vec.begin(), r_error_vec.end(), 0) * 1.0 /
+        t_error_vec.size();
     std::cout << "Total key frame number:" << keyCloudInd
               << ", loop number:" << triggle_loop_num << std::endl;
     std::cout << "Mean time for descriptor extraction: " << mean_descriptor_time
@@ -254,5 +334,8 @@ int main(int argc, char **argv)
               << "ms, update: " << mean_update_time << "ms, total: "
               << mean_descriptor_time + mean_query_time + mean_update_time
               << "ms" << std::endl;
+    std::cout << "Mean translation error: " << mean_translation_error
+              << std::endl;
+    std::cout << "Mean ratation error   : " << mean_rotation_error << std::endl;
     return 0;
 }
