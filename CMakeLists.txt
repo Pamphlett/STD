@@ -97,3 +97,11 @@ target_link_libraries(place_recognition_ntu
         ${PCL_LIBRARIES} 
         ${OpenCV_LIBS} 
         ${CERES_LIBRARIES})
+
+
+add_executable(relocalization_ntu demo/relocalization_std.cpp src/STDesc.cpp )
+target_link_libraries(relocalization_ntu 
+        ${catkin_LIBRARIES} 
+        ${PCL_LIBRARIES} 
+        ${OpenCV_LIBS} 
+        ${CERES_LIBRARIES})
