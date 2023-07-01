@@ -18,6 +18,11 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
+// adding for slict structure
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
+
 #define HASH_P 116101
 #define MAX_N 10000000000
 #define MAX_FRAME_N 20000
@@ -140,6 +145,30 @@ struct std::hash<VOXEL_LOC>
     }
 };
 
+/////////////////// begin slict defined types////////////////////
+
+struct PointTQXYZI
+{
+    PCL_ADD_POINT4D
+    PCL_ADD_INTENSITY; // preferred way of adding a XYZ+padding
+    double t;
+    float qx;
+    float qy;
+    float qz;
+    float qw;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW // make sure our new allocators are aligned
+} EIGEN_ALIGN16; // enforce SSE padding for correct memory alignment
+POINT_CLOUD_REGISTER_POINT_STRUCT(
+    PointTQXYZI,
+    (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
+        double, t, t)(float, qx, qx)(float, qy, qy)(float, qz, qz)(float, qw,
+                                                                   qw))
+typedef PointTQXYZI PointPose;
+typedef pcl::PointCloud<PointPose> CloudPose;
+typedef pcl::PointCloud<PointPose>::Ptr CloudPosePtr;
+
+/////////////////// end slict defined types////////////////////
+
 class STDesc_LOC
 {
 public:
@@ -235,6 +264,18 @@ void down_sampling_voxel(pcl::PointCloud<pcl::PointXYZI> &pl_feat,
 
 void load_pose_with_time(
     const std::string &pose_file,
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
+    std::vector<double> &times_vec);
+
+/**
+ * @brief load key frame poses and time stamps from a pcd file
+ *
+ * @param pose_file
+ * @param poses_vec
+ * @param times_vec
+ */
+void load_keyframes_pose_pcd(
+    const std::string &pose_file, std::vector<int> &index_vec,
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
     std::vector<double> &times_vec);
 
@@ -383,6 +424,21 @@ public:
         const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &source_cloud,
         const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
         std::pair<Eigen::Vector3d, Eigen::Matrix3d> &transform);
+
+    /**
+     * @brief save descriptor and corresponding clouds to local data base
+     *
+     * @param save_path
+     */
+    void saveToFile(const std::string &save_path);
+
+    /**
+     * @brief load STD descriptor and corresponding plane scans
+     *
+     * @param save_path
+     * @param frame_num
+     */
+    void loadExistingSTD(const std::string &save_path, int frame_num);
 
 private:
     /*Following are sub-processing functions*/

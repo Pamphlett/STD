@@ -169,6 +169,30 @@ void load_pose_with_time(
     }
 }
 
+void load_keyframes_pose_pcd(
+    const std::string &pose_file, std::vector<int> &index_vec,
+    std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
+    std::vector<double> &times_vec)
+{
+    pcl::PointCloud<PointPose>::Ptr CloudPosePtr(
+        new pcl::PointCloud<PointPose>());
+    pcl::io::loadPCDFile<PointPose>(pose_file, *CloudPosePtr);
+
+    for (int i = 0; i < CloudPosePtr->points.size(); ++i)
+    {
+        PointPose p = CloudPosePtr->points[i];
+        Eigen::Vector3d temp_xyz(p.x, p.y, p.z);
+        Eigen::Quaterniond temp_q(p.qw, p.qx, p.qy, p.qz);
+        std::pair<Eigen::Vector3d, Eigen::Matrix3d> single_pose;
+        single_pose.first = temp_xyz;
+        single_pose.second = temp_q.toRotationMatrix();
+        poses_vec.push_back(single_pose);
+
+        index_vec.push_back(p.intensity);
+        times_vec.push_back(p.t);
+    }
+}
+
 void load_CSV_pose_with_time(
     const std::string &file_path, std::vector<int> &index_vec,
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
@@ -478,7 +502,7 @@ void STDescManager::GenerateSTDescs(
     getPlane(voxel_map, plane_cloud);
     // std::cout << "[Description] planes size:" << plane_cloud->size() <<
     // std::endl;
-    plane_cloud_vec_.push_back(plane_cloud);
+    // plane_cloud_vec_.push_back(plane_cloud);
 
     // step2, build connection for planes in the voxel map
     build_connection(voxel_map);
@@ -1670,6 +1694,8 @@ void STDescManager::candidate_verify(
                 sucess_match_vec.push_back(verify_pair);
             }
         }
+        std::cout << "matched pair is: " << candidate_matcher.match_id_.first
+                  << "  " << candidate_matcher.match_id_.second << std::endl;
         verify_score = plane_geometric_verify(
             plane_cloud_vec_.back(),
             plane_cloud_vec_[candidate_matcher.match_id_.second],
@@ -1712,6 +1738,12 @@ double STDescManager::plane_geometric_verify(
     const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
     const std::pair<Eigen::Vector3d, Eigen::Matrix3d> &transform)
 {
+    std::cout << "plane vec size: " << plane_cloud_vec_.size() << std::endl;
+    std::cout << "////////////" << plane_cloud_vec_[0]->points.size()
+              << "////////////" << plane_cloud_vec_[1655]->points.size()
+              << std::endl;
+    std::cout << "source size: " << source_cloud->points.size() << std::endl;
+    std::cout << "target size: " << target_cloud->points.size() << std::endl;
     Eigen::Vector3d t = transform.first;
     Eigen::Matrix3d rot = transform.second;
     pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr kd_tree(
@@ -1865,6 +1897,130 @@ void STDescManager::PlaneGeomrtricIcp(
     transform.first = t;
     transform.second = rot;
     // std::cout << "useful match for icp:" << useful_match << std::endl;
+}
+
+void STDescManager::saveToFile(const std::string &save_path)
+{
+    // std::string binaryData(reinterpret_cast<const char *>(&data_base_),
+    //                        sizeof(data_base_));
+
+    // std::string desOutPath = save_path + "des.bin";
+    // std::ofstream outputFile(desOutPath, std::ios::binary);
+    // outputFile.write(binaryData.data(), binaryData.size());
+    // outputFile.close();
+
+    std::string desOutPath = save_path + "des.bin";
+    // 打开文件进行保存
+    std::ofstream outputFile(desOutPath, std::ios::binary);
+    // 获取 data_base_ 的大小
+    size_t mapSize = data_base_.size();
+    // 将 mapSize 写入二进制流
+    outputFile.write(reinterpret_cast<const char *>(&mapSize), sizeof(mapSize));
+    // 遍历 data_base_ 中的键值对，进行序列化
+    for (const auto &pair : data_base_)
+    {
+        // 将 STDesc_LOC 写入二进制流
+        outputFile.write(reinterpret_cast<const char *>(&pair.first),
+                         sizeof(STDesc_LOC));
+        // 获取 vector<STDesc> 的大小
+        size_t vectorSize = pair.second.size();
+        // 将 vectorSize 写入二进制流
+        outputFile.write(reinterpret_cast<const char *>(&vectorSize),
+                         sizeof(vectorSize));
+        // 遍历 vector<STDesc> 中的元素，进行序列化
+        for (const auto &element : pair.second)
+        {
+            // 将 STDesc 写入二进制流
+            outputFile.write(reinterpret_cast<const char *>(&element),
+                             sizeof(STDesc));
+        }
+    }
+    // 关闭文件
+    outputFile.close();
+
+    std::string plane_cloud_path = save_path + "plane_clouds/";
+    std::stringstream ss;
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr currPlaneCloud(
+        new pcl::PointCloud<pcl::PointXYZINormal>());
+    for (int i = 0; i < plane_cloud_vec_.size(); ++i)
+    {
+        ss << plane_cloud_path << std::setfill('0') << std::setw(6) << i
+           << ".pcd";
+        currPlaneCloud = plane_cloud_vec_[i];
+        pcl::io::savePCDFileBinary<pcl::PointXYZINormal>(ss.str(),
+                                                         *currPlaneCloud);
+        ss.clear();
+        ss.str(std::string());
+        currPlaneCloud->clear();
+    }
+}
+
+void STDescManager::loadExistingSTD(const std::string &save_path, int frame_num)
+{
+    std::string des_path = save_path + "des.bin";
+    // // 从文件中读取二进制数据
+    // std::ifstream inputFile(des_path, std::ios::binary | std::ios::ate);
+    // std::streamsize fileSize = inputFile.tellg();
+    // inputFile.seekg(0, std::ios::beg);
+    // std::string binaryData(fileSize, '\0');
+    // inputFile.read(&binaryData[0], fileSize);
+    // inputFile.close();
+    // std::memcpy(&data_base_, binaryData.data(), sizeof(data_base_));
+
+    // std::unordered_map<STDesc_LOC, std::vector<STDesc>> restored_data_base_;
+
+    // 打开文件进行反序列化
+    std::ifstream inputFile(des_path, std::ios::binary);
+    // 读取 data_base_ 的大小
+    size_t mapSize;
+    inputFile.read(reinterpret_cast<char *>(&mapSize), sizeof(mapSize));
+    // 遍历读取键值对，进行反序列化
+    for (size_t i = 0; i < mapSize; ++i)
+    {
+        // 读取 STDesc_LOC
+        STDesc_LOC loc;
+        inputFile.read(reinterpret_cast<char *>(&loc), sizeof(STDesc_LOC));
+        // 读取 vector<STDesc> 的大小
+        size_t vectorSize;
+        inputFile.read(reinterpret_cast<char *>(&vectorSize),
+                       sizeof(vectorSize));
+        // 读取 vector<STDesc> 中的元素，进行反序列化
+        std::vector<STDesc> descVector;
+        for (size_t j = 0; j < vectorSize; ++j)
+        {
+            STDesc desc;
+            inputFile.read(reinterpret_cast<char *>(&desc), sizeof(STDesc));
+            descVector.push_back(desc);
+        }
+        // 将反序列化的数据添加到 restored_data_base_
+        data_base_[loc] = descVector;
+    }
+    inputFile.close();
+
+    // std::cout << "**********" << sizeof(data_base_) << std::endl;
+
+    // int count = 0;
+    // for (const auto &pair : data_base_)
+    // {
+    //     count++;
+    // }
+    // std::cout << "**********" << count << std::endl;
+
+    std::string plan_cloud_path = save_path + "plane_clouds/";
+    std::stringstream ss;
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr currPlaneCloud(
+        new pcl::PointCloud<pcl::PointXYZINormal>());
+    for (auto i = 0; i < frame_num; ++i)
+    {
+        ss << plan_cloud_path << std::setfill('0') << std::setw(6) << i
+           << ".pcd";
+        pcl::io::loadPCDFile<pcl::PointXYZINormal>(ss.str(), *currPlaneCloud);
+        // std::cout << currPlaneCloud->points.size() << std::endl;
+        plane_cloud_vec_.push_back(currPlaneCloud);
+        ss.clear();
+        ss.str(std::string());
+        currPlaneCloud->clear();
+    }
 }
 
 void OctoTree::init_plane()
