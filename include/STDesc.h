@@ -390,6 +390,8 @@ public:
         : config_setting_(config_setting)
     {
         current_frame_id_ = 0;
+
+        current_plane_cloud_.reset(new pcl::PointCloud<pcl::PointXYZINormal>);
     };
 
     // hash table, save all descriptors
@@ -404,11 +406,25 @@ public:
     // save all planes of key frame, required
     std::vector<pcl::PointCloud<pcl::PointXYZINormal>::Ptr> plane_cloud_vec_;
 
+    // save current plane cloud for relocalization purpose, required;
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr current_plane_cloud_;
+
     /*Three main processing functions*/
 
     // generate STDescs from a point cloud
     void GenerateSTDescs(pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
                          std::vector<STDesc> &stds_vec);
+
+    /**
+     * @brief Generate STDs only, without pushing plane_cloud to the storing
+     * vector
+     *
+     * @param input_cloud
+     * @param stds_vec
+     */
+    void GenerateSTDescsOneTime(
+        pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
+        std::vector<STDesc> &stds_vec);
 
     // search result <candidate_id, plane icp score>. -1 for no loop
     void SearchLoop(const std::vector<STDesc> &stds_vec,

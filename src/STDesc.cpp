@@ -502,7 +502,47 @@ void STDescManager::GenerateSTDescs(
     getPlane(voxel_map, plane_cloud);
     // std::cout << "[Description] planes size:" << plane_cloud->size() <<
     // std::endl;
+    plane_cloud_vec_.push_back(plane_cloud);
+
+    // step2, build connection for planes in the voxel map
+    build_connection(voxel_map);
+
+    // step3, extraction corner points
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr corner_points(
+        new pcl::PointCloud<pcl::PointXYZINormal>);
+    corner_extractor(voxel_map, input_cloud, corner_points);
+    corner_cloud_vec_.push_back(corner_points);
+    // std::cout << "[Description] corners size:" << corner_points->size()
+    //           << std::endl;
+
+    // step4, generate stable triangle descriptors
+    stds_vec.clear();
+    build_stdesc(corner_points, stds_vec);
+    // std::cout << "[Description] stds size:" << stds_vec.size() << std::endl;
+
+    // step5, clear memory
+    for (auto iter = voxel_map.begin(); iter != voxel_map.end(); iter++)
+    {
+        delete (iter->second);
+    }
+    return;
+}
+
+void STDescManager::GenerateSTDescsOneTime(
+    pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
+    std::vector<STDesc> &stds_vec)
+{
+    // step1, voxelization and plane dection
+    std::unordered_map<VOXEL_LOC, OctoTree *> voxel_map;
+    init_voxel_map(input_cloud, voxel_map);
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr plane_cloud(
+        new pcl::PointCloud<pcl::PointXYZINormal>);
+    getPlane(voxel_map, plane_cloud);
+    // std::cout << "[Description] planes size:" << plane_cloud->size() <<
+    // std::endl;
     // plane_cloud_vec_.push_back(plane_cloud);
+    current_plane_cloud_.reset(new pcl::PointCloud<pcl::PointXYZINormal>);
+    current_plane_cloud_ = plane_cloud;
 
     // step2, build connection for planes in the voxel map
     build_connection(voxel_map);
@@ -573,6 +613,7 @@ void STDescManager::SearchLoop(
     //           << " ms, candidate verify: " << time_inc(t3, t2) << "ms"
     //           << std::endl;
 
+    std::cout << "current Best score is:   " << best_score << std::endl;
     if (best_score > config_setting_.icp_threshold_)
     {
         loop_result = std::pair<int, double>(best_candidate_id, best_score);
@@ -1694,10 +1735,15 @@ void STDescManager::candidate_verify(
                 sucess_match_vec.push_back(verify_pair);
             }
         }
-        std::cout << "matched pair is: " << candidate_matcher.match_id_.first
-                  << "  " << candidate_matcher.match_id_.second << std::endl;
+        // std::cout << "matched pair is: " << candidate_matcher.match_id_.first
+        //           << "  " << candidate_matcher.match_id_.second << std::endl;
+        // verify_score = plane_geometric_verify(
+        //     plane_cloud_vec_.back(),
+        //     plane_cloud_vec_[candidate_matcher.match_id_.second],
+        //     relative_pose);
+
         verify_score = plane_geometric_verify(
-            plane_cloud_vec_.back(),
+            current_plane_cloud_,
             plane_cloud_vec_[candidate_matcher.match_id_.second],
             relative_pose);
     }
@@ -1705,6 +1751,8 @@ void STDescManager::candidate_verify(
     {
         verify_score = -1;
     }
+    // free current plane cloud
+    // current_plane_cloud_.reset(new pcl::PointCloud<pcl::PointXYZINormal>);
 }
 
 void STDescManager::triangle_solver(std::pair<STDesc, STDesc> &std_pair,
@@ -1738,12 +1786,6 @@ double STDescManager::plane_geometric_verify(
     const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
     const std::pair<Eigen::Vector3d, Eigen::Matrix3d> &transform)
 {
-    std::cout << "plane vec size: " << plane_cloud_vec_.size() << std::endl;
-    std::cout << "////////////" << plane_cloud_vec_[0]->points.size()
-              << "////////////" << plane_cloud_vec_[1655]->points.size()
-              << std::endl;
-    std::cout << "source size: " << source_cloud->points.size() << std::endl;
-    std::cout << "target size: " << target_cloud->points.size() << std::endl;
     Eigen::Vector3d t = transform.first;
     Eigen::Matrix3d rot = transform.second;
     pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr kd_tree(
@@ -1911,7 +1953,7 @@ void STDescManager::saveToFile(const std::string &save_path)
 
     std::string desOutPath = save_path + "des.bin";
     // 打开文件进行保存
-    std::ofstream outputFile(desOutPath, std::ios::binary);
+    std::ofstream outputFile(desOutPath, std::ios::binary | std::ios::trunc);
     // 获取 data_base_ 的大小
     size_t mapSize = data_base_.size();
     // 将 mapSize 写入二进制流
@@ -1942,6 +1984,8 @@ void STDescManager::saveToFile(const std::string &save_path)
     std::stringstream ss;
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr currPlaneCloud(
         new pcl::PointCloud<pcl::PointXYZINormal>());
+    // ROS_INFO("Current plane cloud size is: %d",
+    // currPlaneCloud->points.size());
     for (int i = 0; i < plane_cloud_vec_.size(); ++i)
     {
         ss << plane_cloud_path << std::setfill('0') << std::setw(6) << i
@@ -1958,16 +2002,6 @@ void STDescManager::saveToFile(const std::string &save_path)
 void STDescManager::loadExistingSTD(const std::string &save_path, int frame_num)
 {
     std::string des_path = save_path + "des.bin";
-    // // 从文件中读取二进制数据
-    // std::ifstream inputFile(des_path, std::ios::binary | std::ios::ate);
-    // std::streamsize fileSize = inputFile.tellg();
-    // inputFile.seekg(0, std::ios::beg);
-    // std::string binaryData(fileSize, '\0');
-    // inputFile.read(&binaryData[0], fileSize);
-    // inputFile.close();
-    // std::memcpy(&data_base_, binaryData.data(), sizeof(data_base_));
-
-    // std::unordered_map<STDesc_LOC, std::vector<STDesc>> restored_data_base_;
 
     // 打开文件进行反序列化
     std::ifstream inputFile(des_path, std::ios::binary);
@@ -1997,29 +2031,23 @@ void STDescManager::loadExistingSTD(const std::string &save_path, int frame_num)
     }
     inputFile.close();
 
-    // std::cout << "**********" << sizeof(data_base_) << std::endl;
-
-    // int count = 0;
-    // for (const auto &pair : data_base_)
-    // {
-    //     count++;
-    // }
-    // std::cout << "**********" << count << std::endl;
-
     std::string plan_cloud_path = save_path + "plane_clouds/";
     std::stringstream ss;
-    pcl::PointCloud<pcl::PointXYZINormal>::Ptr currPlaneCloud(
-        new pcl::PointCloud<pcl::PointXYZINormal>());
     for (auto i = 0; i < frame_num; ++i)
     {
+        pcl::PointCloud<pcl::PointXYZINormal>::Ptr currPlaneCloud(
+            new pcl::PointCloud<pcl::PointXYZINormal>());
         ss << plan_cloud_path << std::setfill('0') << std::setw(6) << i
            << ".pcd";
         pcl::io::loadPCDFile<pcl::PointXYZINormal>(ss.str(), *currPlaneCloud);
-        // std::cout << currPlaneCloud->points.size() << std::endl;
-        plane_cloud_vec_.push_back(currPlaneCloud);
+        // std::cout << "before push_back: " << currPlaneCloud->points.size()
+        //           << std::endl;
+        this->plane_cloud_vec_.push_back(currPlaneCloud);
+        // std::cout << "aft push_back:    "
+        //           << plane_cloud_vec_.back()->points.size() << std::endl;
         ss.clear();
         ss.str(std::string());
-        currPlaneCloud->clear();
+        // currPlaneCloud->clear();
     }
 }
 

@@ -139,7 +139,7 @@ int main(int argc, char **argv)
                 temp_cloud->points.push_back(pv);
             }
 
-            if (cloudInd % config_setting.sub_frame_num_ == 0 && cloudInd != 0)
+            if (cloudInd % config_setting.sub_frame_num_ == 0)
             {
                 // step1. Descriptor Extraction
                 // auto t_descriptor_begin =
@@ -156,12 +156,12 @@ int main(int argc, char **argv)
                 // update_time.push_back(
                 //     time_inc(t_map_update_end, t_map_update_begin));
 
-                pcl::PointCloud<pcl::PointXYZI> save_key_cloud;
-                save_key_cloud = *temp_cloud;
+                // pcl::PointCloud<pcl::PointXYZI> save_key_cloud;
+                // save_key_cloud = *temp_cloud;
 
-                std_manager->key_cloud_vec_.push_back(
-                    save_key_cloud.makeShared());
-                generate_key_poses_vec.push_back(generate_poses_vec[cloudInd]);
+                // std_manager->key_cloud_vec_.push_back(
+                //     save_key_cloud.makeShared());
+                // generate_key_poses_vec.push_back(generate_poses_vec[cloudInd]);
             }
 
             if (cloudInd % 100 == 0)
@@ -179,8 +179,10 @@ int main(int argc, char **argv)
     }
 
     // load STD descriptors in storage
-    std_manager->loadExistingSTD(descriptor_path, 2964);
+    std_manager->loadExistingSTD(descriptor_path, 2965);
     ROS_INFO("Loaded saved STD.");
+
+    /////////////// localization //////////////
 
     cloudInd = 0;
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
@@ -189,9 +191,6 @@ int main(int argc, char **argv)
     std::vector<int> localization_index_vec;
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
         localization_key_poses_vec;
-
-    // load_CSV_pose_with_time(localization_pose_path, localization_index_vec,
-    //                         localization_poses_vec, localization_times_vec);
 
     load_keyframes_pose_pcd(localization_pose_path, localization_index_vec,
                             localization_poses_vec, localization_times_vec);
@@ -255,14 +254,14 @@ int main(int argc, char **argv)
         }
 
         // check if keyframe
-        if (cloudInd % config_setting.sub_frame_num_ == 0 && cloudInd != 0)
+        if (cloudInd % config_setting.sub_frame_num_ == 0)
         {
             std::cout << "Key Frame id:" << keyCloudInd
                       << ", cloud size: " << temp_cloud->size() << std::endl;
             // step1. Descriptor Extraction
             auto t_descriptor_begin = std::chrono::high_resolution_clock::now();
             std::vector<STDesc> stds_vec;
-            std_manager->GenerateSTDescs(temp_cloud, stds_vec);
+            std_manager->GenerateSTDescsOneTime(temp_cloud, stds_vec);
             auto t_descriptor_end = std::chrono::high_resolution_clock::now();
             descriptor_time.push_back(
                 time_inc(t_descriptor_end, t_descriptor_begin));
@@ -273,23 +272,18 @@ int main(int argc, char **argv)
             loop_transform.first << 0, 0, 0;
             loop_transform.second = Eigen::Matrix3d::Identity();
             std::vector<std::pair<STDesc, STDesc>> loop_std_pair;
-            if (keyCloudInd > config_setting.skip_near_num_)
-            {
-                std_manager->SearchLoop(stds_vec, search_result, loop_transform,
-                                        loop_std_pair);
-            }
+            std_manager->SearchLoop(stds_vec, search_result, loop_transform,
+                                    loop_std_pair);
             if (search_result.first > 0)
             {
-                std::cout << "Current Frame Num is:          " << cloudInd
-                          << std::endl;
                 std::cout << "[Loop Detection] triggle loop: " << keyCloudInd
                           << "--" << search_result.first
                           << ", score:" << search_result.second << std::endl;
 
                 // Compute Pose Estimation Error
-                int match_frame = search_result.first + 1;
+                int match_frame = search_result.first;
                 std_manager->PlaneGeomrtricIcp(
-                    std_manager->plane_cloud_vec_.back(),
+                    std_manager->current_plane_cloud_,
                     std_manager->plane_cloud_vec_[match_frame], loop_transform);
 
                 Eigen::Matrix4d estimated_transform;
@@ -378,11 +372,12 @@ int main(int argc, char **argv)
             pub_cloud.header.frame_id = "camera_init";
             pubCurrentCorner.publish(pub_cloud);
 
-            if (search_result.first > 0)
+            if (search_result.first >= 0)
             {
                 triggle_loop_num++;
-                pcl::toROSMsg(*std_manager->key_cloud_vec_[search_result.first],
-                              pub_cloud);
+                pcl::toROSMsg(
+                    *std_manager->plane_cloud_vec_[search_result.first],
+                    pub_cloud);
                 pub_cloud.header.frame_id = "camera_init";
                 pubMatchedCloud.publish(pub_cloud);
                 slow_loop.sleep();
@@ -392,14 +387,14 @@ int main(int argc, char **argv)
                 pubRegisterCloud.publish(pub_cloud);
                 slow_loop.sleep();
 
-                pcl::toROSMsg(
-                    *std_manager->corner_cloud_vec_[search_result.first],
-                    pub_cloud);
-                pub_cloud.header.frame_id = "camera_init";
-                pubMatchedCorner.publish(pub_cloud);
-                publish_std_pairs(loop_std_pair, pubSTD);
-                slow_loop.sleep();
-                getchar();
+                // pcl::toROSMsg(
+                //     *std_manager->corner_cloud_vec_[search_result.first],
+                //     pub_cloud);
+                // pub_cloud.header.frame_id = "camera_init";
+                // pubMatchedCorner.publish(pub_cloud);
+                // publish_std_pairs(loop_std_pair, pubSTD);
+                // slow_loop.sleep();
+                // getchar();
             }
             temp_cloud->clear();
             keyCloudInd++;
