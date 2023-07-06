@@ -280,6 +280,18 @@ void load_keyframes_pose_pcd(
     std::vector<double> &times_vec);
 
 /**
+ * @brief find the nerest neighbor frame in reference_time_vec for every frame
+ * in key_frame_times_vec
+ *
+ * @param key_frame_times_vec
+ * @param reference_time_vec
+ * @return std::vector<int> the resulted index vector
+ */
+std::vector<int> findCorrespondingFrames(
+    const std::vector<double> &key_frame_times_vec,
+    const std::vector<double> &reference_time_vec);
+
+/**
  * @brief load pose from a .csv file
  *
  * @param file_path path for the pose file

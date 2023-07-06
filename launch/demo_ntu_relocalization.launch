@@ -16,6 +16,8 @@
   <param name="localization_pose_path" type="string" value = "/home/samsung/NTU_carpark/result_ntu_day_02/KfCloudPose.pcd"/>
   <param name="generate_descriptor_database" type="bool" value = "false"/>
   <param name="descriptor_file_path" type="string" value = "/home/samsung/NTU_carpark/ntu_night_04/saved_descriptors/"/>
+  <param name="reference_gt_path" type="string" value = "/home/samsung/NTU_carpark/ntu_day_02/pose_inW.csv"/>
+
 
 
   <group if="$(arg rviz)">

@@ -189,8 +189,35 @@ void load_keyframes_pose_pcd(
         poses_vec.push_back(single_pose);
 
         index_vec.push_back(p.intensity);
-        times_vec.push_back(p.t);
+        times_vec.push_back(p.t - 0.1);
     }
+}
+
+std::vector<int> findCorrespondingFrames(
+    const std::vector<double> &key_frame_times_vec,
+    const std::vector<double> &reference_time_vec)
+{
+    std::vector<int> corresponding_frames;
+
+    size_t i = 0;
+    for (const auto &key_frame_times : key_frame_times_vec)
+    {
+        int corresponding_frame = -1;
+        double min_time_diff = 0.005;
+
+        for (i; i < reference_time_vec.size(); ++i)
+        {
+            double time_diff =
+                std::abs(reference_time_vec[i] - key_frame_times);
+            if (time_diff < min_time_diff)
+            {
+                corresponding_frame = i;
+                corresponding_frames.push_back(corresponding_frame);
+                break;
+            }
+        }
+    }
+    return corresponding_frames;
 }
 
 void load_CSV_pose_with_time(
@@ -613,7 +640,6 @@ void STDescManager::SearchLoop(
     //           << " ms, candidate verify: " << time_inc(t3, t2) << "ms"
     //           << std::endl;
 
-    std::cout << "current Best score is:   " << best_score << std::endl;
     if (best_score > config_setting_.icp_threshold_)
     {
         loop_result = std::pair<int, double>(best_candidate_id, best_score);
@@ -1735,8 +1761,6 @@ void STDescManager::candidate_verify(
                 sucess_match_vec.push_back(verify_pair);
             }
         }
-        // std::cout << "matched pair is: " << candidate_matcher.match_id_.first
-        //           << "  " << candidate_matcher.match_id_.second << std::endl;
         // verify_score = plane_geometric_verify(
         //     plane_cloud_vec_.back(),
         //     plane_cloud_vec_[candidate_matcher.match_id_.second],
