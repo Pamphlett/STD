@@ -661,6 +661,7 @@ void STDescManager::AddSTDescs(const std::vector<STDesc> &stds_vec)
     for (auto single_std : stds_vec)
     {
         // calculate the position of single std
+        // data_base_里是特征（边长和夹角等相对关系）到特征属性（三角形顶点位置）的映射
         STDesc_LOC position;
         position.x = (int)(single_std.side_length_[0] + 0.5);
         position.y = (int)(single_std.side_length_[1] + 0.5);
@@ -1556,6 +1557,9 @@ void STDescManager::candidate_selector(
             position.x = (int)(src_std.side_length_[0] + voxel_inc[0]);
             position.y = (int)(src_std.side_length_[1] + voxel_inc[1]);
             position.z = (int)(src_std.side_length_[2] + voxel_inc[2]);
+            position.a = (int)(src_std.angle_[0]);
+            position.b = (int)(src_std.angle_[1]);
+            position.c = (int)(src_std.angle_[2]);
             Eigen::Vector3d voxel_center((double)position.x + 0.5,
                                          (double)position.y + 0.5,
                                          (double)position.z + 0.5);
