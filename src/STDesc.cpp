@@ -1,4 +1,6 @@
 #include "include/STDesc.h"
+#include <filesystem>
+
 void down_sampling_voxel(pcl::PointCloud<pcl::PointXYZI> &pl_feat,
                          double voxel_size)
 {
@@ -1971,6 +1973,9 @@ void STDescManager::PlaneGeomrtricIcp(
 
 void STDescManager::saveToFile(const std::string &save_path)
 {
+    std::filesystem::create_directories(save_path);
+    std::filesystem::create_directories(save_path + "/plane_clouds");
+
     // std::string binaryData(reinterpret_cast<const char *>(&data_base_),
     //                        sizeof(data_base_));
 
@@ -1985,6 +1990,7 @@ void STDescManager::saveToFile(const std::string &save_path)
     // 获取 data_base_ 的大小
     size_t mapSize = data_base_.size();
     // 将 mapSize 写入二进制流
+
     outputFile.write(reinterpret_cast<const char *>(&mapSize), sizeof(mapSize));
     // 遍历 data_base_ 中的键值对，进行序列化
     for (const auto &pair : data_base_)
