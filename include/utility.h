@@ -1023,19 +1023,19 @@ namespace Util
 //         vecA = vecTemp;
 //     }
 
-//     template <typename PointType>
-//     sensor_msgs::PointCloud2 publishCloud(ros::Publisher &thisPub,
-//                                           pcl::PointCloud<PointType> &thisCloud,
-//                                           ros::Time thisStamp, std::string thisFrame)
-//     {
-//         sensor_msgs::PointCloud2 tempCloud;
-//         pcl::toROSMsg(thisCloud, tempCloud);
-//         tempCloud.header.stamp = thisStamp;
-//         tempCloud.header.frame_id = thisFrame;
-//         // if (thisPub.getNumSubscribers() != 0)
-//             thisPub.publish(tempCloud);
-//         return tempCloud;
-//     }
+    template <typename PointType>
+    sensor_msgs::PointCloud2 publishCloud(ros::Publisher &thisPub,
+                                          pcl::PointCloud<PointType> &thisCloud,
+                                          ros::Time thisStamp, std::string thisFrame)
+    {
+        sensor_msgs::PointCloud2 tempCloud;
+        pcl::toROSMsg(thisCloud, tempCloud);
+        tempCloud.header.stamp = thisStamp;
+        tempCloud.header.frame_id = thisFrame;
+        // if (thisPub.getNumSubscribers() != 0)
+            thisPub.publish(tempCloud);
+        return tempCloud;
+    }
 
     template <typename T = double>
     T wrapTo360(T angle)

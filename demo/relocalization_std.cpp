@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 
     ros::Publisher pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_init", 10);
     ros::Publisher pubRegisterCloud = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100);
-    ros::Publisher pubCureentCloud  = nh.advertise<sensor_msgs::PointCloud2>("/cloud_current", 100);
+    ros::Publisher pubCurrentCloud  = nh.advertise<sensor_msgs::PointCloud2>("/cloud_current", 100);
     ros::Publisher pubCurrentCorner = nh.advertise<sensor_msgs::PointCloud2>("/cloud_key_points", 100);
     ros::Publisher pubMatchedCloud  = nh.advertise<sensor_msgs::PointCloud2>("/cloud_matched", 100);
     ros::Publisher pubMatchedCorner = nh.advertise<sensor_msgs::PointCloud2>("/cloud_matched_key_points", 100);
@@ -262,12 +262,15 @@ int main(int argc, char **argv)
         if (cloudInd >= loc_total_size)
             break;
 
+        /* #region Load the pointcloud from localization process ----------------------------------------------------*/
+
+        // Deduce the correct file name
         int curr_index = localization_index_vec[cloudInd];
         std::string curr_lidar_path = localization_lidar_path + "/KfCloudinW_" + zeroPaddedString(curr_index, loc_total_size) + ".pcd";
 
+        // Load the pointcloud from memory. SHOULD be replaced subscribing to pointcloud odometry 
         CloudXYZIPtr current_cloud(new CloudXYZI());
         CloudXYZIPtr cloud_registered(new CloudXYZI());
-
         if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *current_cloud) == -1)
         {
             ROS_ERROR(KRED "Couldn't read scan from file. \n" RESET);
@@ -282,24 +285,26 @@ int main(int argc, char **argv)
         // Transform pointcloud to world frame
         pcl::transformPointCloud<PointXYZI>( *current_cloud, *current_cloud, tf_W_B.inverse().tfMat().cast<float>());
 
+        // Downsample the pointcloud
         down_sampling_voxel(*current_cloud, config_setting.ds_size_);
-        for (auto pv : current_cloud->points)
-            temp_cloud->points.push_back(pv);
 
-        // check each keyframe
+        /* #endregion Load the pointcloud from localization process -------------------------------------------------*/
+
+
+        // check if keyframe
         if (cloudInd % config_setting.sub_frame_num_ == 0)
         {
             std::cout << "Key Frame id:"  << keyCloudInd
-                      << ", cloud size: " << temp_cloud->size() << std::endl;
+                      << ", cloud size: " << current_cloud->size() << std::endl;
             
             // step1. Descriptor Extraction
 
-            TicToc tt_descriptor_begin;
+            TicToc tt_desc_extr;
             
             std::vector<STDesc> stds_vec;
-            std_manager->GenerateSTDescsOneTime(temp_cloud, stds_vec);
+            std_manager->GenerateSTDescsOneTime(current_cloud, stds_vec);
 
-            descriptor_time.push_back(tt_descriptor_begin.Toc());
+            descriptor_time.push_back(tt_desc_extr.Toc());
             
             // step2. Searching Loop
             
@@ -319,31 +324,22 @@ int main(int argc, char **argv)
                 std_manager->PlaneGeomrtricIcp(std_manager->current_plane_cloud_,
                                                std_manager->plane_cloud_vec_[match_frame], loop_transform);
 
-                // Eigen::Matrix4d estimated_transform;
-                // estimated_transform.topLeftCorner(3, 3) = loop_transform.second;
-                // estimated_transform.topRightCorner(3, 1) = loop_transform.first;
                 myTf tf_W_B_est(loop_transform.second, loop_transform.first);
 
-                pcl::transformPointCloud<PointXYZI>(*temp_cloud, *cloud_registered, tf_W_B_est.cast<float>().tfMat());
+                pcl::transformPointCloud<PointXYZI>(*current_cloud, *cloud_registered, tf_W_B_est.cast<float>().tfMat());
 
                 Vector3d gt_translation = reference_gt_pose_vec[resulted_index[keyCloudInd]].first;
                 Matrix3d gt_rotation = reference_gt_pose_vec[resulted_index[keyCloudInd]].second;
 
                 double t_e = (gt_translation - tf_W_B_est.pos).norm();
-                // double r_e = std::abs(std::acos(fmin(fmax(((gt_rotation *
-                //                                             tf_W_B_est.rot.inverse()
-                //                                            ).trace()
-                //                                            - 1
-                //                                           ) / 2, -1.0), 1.0))) / M_PI * 180;
-                
-                double r_e = fabs(wrapTo360(SO3Log(gt_rotation * tf_W_B_est.rot.inverse()).norm() * 180 / M_PI   
-                                            + 180.0)
+                double r_e = fabs(wrapTo360(SO3Log(gt_rotation * tf_W_B_est.rot.inverse()).norm() * 180 / M_PI + 180.0)
                                   - 180.0);
 
                 printf(KGRN "Estimated Trans Err:  %6.3f m. Rot Err: %6.3f deg.\n" RESET, t_e, r_e);
                 
                 t_error_vec.push_back(t_e);
                 r_error_vec.push_back(r_e);
+                
                 if (r_e > 100.0)
                     flagStop = true;
             }
@@ -368,25 +364,16 @@ int main(int argc, char **argv)
             std::cout << std::endl;
 
             // publish
-            sensor_msgs::PointCloud2 pub_cloud;
-            pcl::toROSMsg(*temp_cloud, pub_cloud);
-            pub_cloud.header.frame_id = "camera_init";
-            pubCureentCloud.publish(pub_cloud);
-            pcl::toROSMsg(*std_manager->corner_cloud_vec_.back(), pub_cloud);
-            pub_cloud.header.frame_id = "camera_init";
-            pubCurrentCorner.publish(pub_cloud);
+            publishCloud(pubCurrentCloud, *current_cloud, ros::Time::now(), "camera_init");
+            publishCloud(pubCurrentCorner, *std_manager->corner_cloud_vec_.back(), ros::Time::now(), "camera_init");
 
             if (search_result.first >= 0)
             {
                 triggle_loop_num++;
-                pcl::toROSMsg(*std_manager->plane_cloud_vec_[search_result.first],pub_cloud);
-                pub_cloud.header.frame_id = "camera_init";
-                pubMatchedCloud.publish(pub_cloud);
+                publishCloud(pubMatchedCloud, *std_manager->plane_cloud_vec_[search_result.first], ros::Time::now(), "camera_init");
                 slow_loop.sleep();
-
-                pcl::toROSMsg(*cloud_registered, pub_cloud);
-                pub_cloud.header.frame_id = "camera_init";
-                pubRegisterCloud.publish(pub_cloud);
+                
+                publishCloud(pubRegisterCloud, *cloud_registered, ros::Time::now(), "camera_init");
                 slow_loop.sleep();
 
                 // pcl::toROSMsg(
@@ -396,11 +383,11 @@ int main(int argc, char **argv)
                 // pubMatchedCorner.publish(pub_cloud);
                 // publish_std_pairs(loop_std_pair, pubSTD);
                 // slow_loop.sleep();
-                if (flagStop)
-                {
-                    getchar();
-                    flagStop = false;
-                }
+                // if (flagStop)
+                // {
+                //     getchar();
+                //     flagStop = false;
+                // }
             }
 
             temp_cloud->clear();
@@ -411,9 +398,9 @@ int main(int argc, char **argv)
         // Create odom for visualization
         nav_msgs::Odometry odom;
         odom.header.frame_id = "camera_init";
-        odom.pose.pose.position.x = tf_W_B.pos(0);
-        odom.pose.pose.position.y = tf_W_B.pos(1);
-        odom.pose.pose.position.z = tf_W_B.pos(2);
+        odom.pose.pose.position.x    = tf_W_B.pos(0);
+        odom.pose.pose.position.y    = tf_W_B.pos(1);
+        odom.pose.pose.position.z    = tf_W_B.pos(2);
         odom.pose.pose.orientation.w = tf_W_B.rot.w();
         odom.pose.pose.orientation.x = tf_W_B.rot.x();
         odom.pose.pose.orientation.y = tf_W_B.rot.y();

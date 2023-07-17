@@ -4,8 +4,7 @@
 
 using CloudXYZI = pcl::PointCloud<pcl::PointXYZI>;
 
-void down_sampling_voxel(CloudXYZI &pl_feat,
-                         double voxel_size)
+void down_sampling_voxel(CloudXYZI &pl_feat, double voxel_size)
 {
     int intensity = rand() % 255;
     if (voxel_size < 0.01)
