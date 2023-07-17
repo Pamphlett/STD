@@ -258,38 +258,38 @@ typedef Eigen::Quaterniond Quaternf;
 //     point.z = p_baselink.z();
 // }
 
-// class TicToc
-// {
-// public:
-//     TicToc()
-//     {
-//         Tic();
-//     }
+class TicToc
+{
+public:
+    TicToc()
+    {
+        Tic();
+    }
 
-//     void Tic()
-//     {
-//         start_ = std::chrono::system_clock::now();
-//     }
+    void Tic()
+    {
+        start_ = std::chrono::system_clock::now();
+    }
 
-//     double Toc()
-//     {
-//         end_ = std::chrono::system_clock::now();
-//         elapsed_seconds_ = end_ - start_;
-//         return elapsed_seconds_.count() * 1000;
-//     }
+    double Toc()
+    {
+        end_ = std::chrono::system_clock::now();
+        elapsed_seconds_ = end_ - start_;
+        return elapsed_seconds_.count() * 1000;
+    }
 
-//     double GetLastStop()
-//     {
-//         return elapsed_seconds_.count() * 1000;
-//     }
+    double GetLastStop()
+    {
+        return elapsed_seconds_.count() * 1000;
+    }
 
-// #define LASTSTOP(x) printf(#x".LastStop : %f\n", x.GetLastStop());
-// #define TOCPRINT(x) printf(#x".Toc : %f\n", x.Toc());
+#define LASTSTOP(x) printf(#x".LastStop : %f\n", x.GetLastStop());
+#define TOCPRINT(x) printf(#x".Toc : %f\n", x.Toc());
 
-// private:
-//     std::chrono::time_point<std::chrono::system_clock> start_, end_;
-//     std::chrono::duration<double> elapsed_seconds_;
-// };
+private:
+    std::chrono::time_point<std::chrono::system_clock> start_, end_;
+    std::chrono::duration<double> elapsed_seconds_;
+};
 
 template <typename T = double>
 struct myTf
@@ -996,8 +996,8 @@ typedef myTf<> mytf;
 //     return outCloud;
 // }
 
-// namespace Util
-// {
+namespace Util
+{
 //     void ComputeCeresCost(vector<ceres::internal::ResidualBlock *> &res_ids,
 //                           double &cost, ceres::Problem &problem)
 //     {
@@ -1037,13 +1037,27 @@ typedef myTf<> mytf;
 //         return tempCloud;
 //     }
 
-//     static float wrapTo360(float angle)
-//     {
-//         angle = fmod(angle, 360);
-//         if (angle < 0)
-//             angle += 360;
-//         return angle;
-//     }
+    template <typename T = double>
+    T wrapTo360(T angle)
+    {
+        angle = fmod(angle, 360);
+        if (angle < 0)
+            angle += 360;
+        return angle;
+    }
+
+    template <typename Group>
+    Vector3d SO3Log(Group R)
+    {
+        Eigen::AngleAxis<double> phi = Eigen::AngleAxis<double>(R);
+        return phi.angle()*phi.axis();
+    }
+
+    // Vector3d SO3Log(Quaternd Q)
+    // {
+    //     Eigen::AngleAxis<double> phi = Eigen::AngleAxis<double>(Q);
+    //     return phi.angle()*phi.axis();
+    // }
 
 //     static double wrapTo180(double angle)
 //     {
@@ -1417,7 +1431,7 @@ typedef myTf<> mytf;
 //             two_pi * std::floor((-angle_degrees + T(180)) / two_pi);
 //     };
 
-// }; // namespace Util
+}; // namespace Util
 
 // #define _CRT_NO_VA_START_VALIDATION
 // inline std::string myprintf(const std::string& format, ...)

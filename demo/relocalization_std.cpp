@@ -7,6 +7,7 @@
 
 using namespace pcl;
 using namespace Eigen;
+using namespace Util;
 
 // Read KITTI data
 std::vector<float> read_lidar_data(const std::string lidar_data_path)
@@ -267,7 +268,6 @@ int main(int argc, char **argv)
         CloudXYZIPtr current_cloud(new CloudXYZI());
         CloudXYZIPtr cloud_registered(new CloudXYZI());
 
-        myTf tf_W_B(localization_poses_vec[cloudInd].second, localization_poses_vec[cloudInd].first);
         if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *current_cloud) == -1)
         {
             ROS_ERROR(KRED "Couldn't read scan from file. \n" RESET);
@@ -276,6 +276,10 @@ int main(int argc, char **argv)
             return (-1);
         }
 
+        // Extract the pointcloud pose
+        myTf tf_W_B(localization_poses_vec[cloudInd].second, localization_poses_vec[cloudInd].first);
+
+        // Transform pointcloud to world frame
         pcl::transformPointCloud<PointXYZI>( *current_cloud, *current_cloud, tf_W_B.inverse().tfMat().cast<float>());
 
         down_sampling_voxel(*current_cloud, config_setting.ds_size_);
@@ -285,82 +289,66 @@ int main(int argc, char **argv)
         // check each keyframe
         if (cloudInd % config_setting.sub_frame_num_ == 0)
         {
-            std::cout << "Key Frame id:" << keyCloudInd
+            std::cout << "Key Frame id:"  << keyCloudInd
                       << ", cloud size: " << temp_cloud->size() << std::endl;
             
             // step1. Descriptor Extraction
-            auto t_descriptor_begin = std::chrono::high_resolution_clock::now();
+
+            TicToc tt_descriptor_begin;
+            
             std::vector<STDesc> stds_vec;
             std_manager->GenerateSTDescsOneTime(temp_cloud, stds_vec);
-            auto t_descriptor_end = std::chrono::high_resolution_clock::now();
-            descriptor_time.push_back(time_inc(t_descriptor_end, t_descriptor_begin));
+
+            descriptor_time.push_back(tt_descriptor_begin.Toc());
             
             // step2. Searching Loop
-            auto t_query_begin = std::chrono::high_resolution_clock::now();
+            
+            TicToc tt_query_begin;
+
             std::pair<int, double> search_result(-1, 0);
-            std::pair<Vector3d, Matrix3d> loop_transform;
-            loop_transform.first << 0, 0, 0;
-            loop_transform.second = Matrix3d::Identity();
+            std::pair<Vector3d, Matrix3d> loop_transform = make_pair(Vector3d(0, 0, 0), Matrix3d::Identity());
             std::vector<std::pair<STDesc, STDesc>> loop_std_pair;
-            std_manager->SearchLoop(stds_vec, search_result, loop_transform,
-                                    loop_std_pair);
+            std_manager->SearchLoop(stds_vec, search_result, loop_transform, loop_std_pair);
+
             if (search_result.first > 0)
             {
-                std::cout << "[Loop Detection] triggle loop: " << keyCloudInd
-                          << "--" << search_result.first
-                          << ", score:" << search_result.second << std::endl;
+                printf(KGRN "[Loop Detection] triggle loop: %4d -- %4d. Score: %.5f\n" RESET, keyCloudInd, search_result.first, search_result.second);
 
                 // Compute Pose Estimation Error
                 int match_frame = search_result.first;
-                std_manager->PlaneGeomrtricIcp(
-                    std_manager->current_plane_cloud_,
-                    std_manager->plane_cloud_vec_[match_frame], loop_transform);
+                std_manager->PlaneGeomrtricIcp(std_manager->current_plane_cloud_,
+                                               std_manager->plane_cloud_vec_[match_frame], loop_transform);
 
-                Eigen::Matrix4d estimated_transform;
-                estimated_transform.topLeftCorner(3, 3) = loop_transform.second;
-                estimated_transform.topRightCorner(3, 1) = loop_transform.first;
+                // Eigen::Matrix4d estimated_transform;
+                // estimated_transform.topLeftCorner(3, 3) = loop_transform.second;
+                // estimated_transform.topRightCorner(3, 1) = loop_transform.first;
+                myTf tf_W_B_est(loop_transform.second, loop_transform.first);
 
-                pcl::transformPointCloud<PointXYZI>(*temp_cloud, *cloud_registered,(estimated_transform).cast<float>());
+                pcl::transformPointCloud<PointXYZI>(*temp_cloud, *cloud_registered, tf_W_B_est.cast<float>().tfMat());
 
-                // Eigen::Matrix4d odom_trans_matrix;
-                // odom_trans_matrix.setIdentity();
-                // odom_trans_matrix.topLeftCorner(3, 3) = tf_W_B.rot.toRotationMatrix();
-                // odom_trans_matrix.topRightCorner(3, 1) = tf_W_B.pos;
+                Vector3d gt_translation = reference_gt_pose_vec[resulted_index[keyCloudInd]].first;
+                Matrix3d gt_rotation = reference_gt_pose_vec[resulted_index[keyCloudInd]].second;
 
-                Eigen::Matrix4d estimated_pose_inW;
-                estimated_pose_inW = estimated_transform;
+                double t_e = (gt_translation - tf_W_B_est.pos).norm();
+                // double r_e = std::abs(std::acos(fmin(fmax(((gt_rotation *
+                //                                             tf_W_B_est.rot.inverse()
+                //                                            ).trace()
+                //                                            - 1
+                //                                           ) / 2, -1.0), 1.0))) / M_PI * 180;
+                
+                double r_e = fabs(wrapTo360(SO3Log(gt_rotation * tf_W_B_est.rot.inverse()).norm() * 180 / M_PI   
+                                            + 180.0)
+                                  - 180.0);
 
-                Vector3d gt_translation =
-                    reference_gt_pose_vec[resulted_index[keyCloudInd]].first;
-                Matrix3d gt_rotation =
-                    reference_gt_pose_vec[resulted_index[keyCloudInd]].second;
-
-                double t_e =
-                    (gt_translation - estimated_pose_inW.topRightCorner(3, 1))
-                        .norm();
-                double r_e =
-                    std::abs(std::acos(fmin(
-                        fmax(((gt_rotation *
-                               estimated_pose_inW.topLeftCorner(3, 3).inverse())
-                                  .trace() -
-                              1) /
-                                 2,
-                             -1.0),
-                        1.0))) /
-                    M_PI * 180;
-                std::cout << "Estimated Translation Error is:  " << t_e << " m;"
-                          << std::endl;
-                std::cout << "Estimated Rotation Error is:     " << r_e
-                          << " degree;" << std::endl;
+                printf(KGRN "Estimated Trans Err:  %6.3f m. Rot Err: %6.3f deg.\n" RESET, t_e, r_e);
+                
                 t_error_vec.push_back(t_e);
                 r_error_vec.push_back(r_e);
                 if (r_e > 100.0)
-                {
                     flagStop = true;
-                }
             }
-            auto t_query_end = std::chrono::high_resolution_clock::now();
-            querying_time.push_back(time_inc(t_query_end, t_query_begin));
+
+            querying_time.push_back(tt_query_begin.Toc());
 
             // step3. Add descriptors to the database
             // auto t_map_update_begin =
@@ -370,9 +358,9 @@ int main(int argc, char **argv)
             // std::chrono::high_resolution_clock::now(); update_time.push_back(
             //     time_inc(t_map_update_end, t_map_update_begin));
             std::cout << "[Time] descriptor extraction: "
-                      << time_inc(t_descriptor_end, t_descriptor_begin)
+                      << tt_query_begin.GetLastStop()
                       << "ms, "
-                      << "query: " << time_inc(t_query_end, t_query_begin)
+                      << "query: " << tt_query_begin.GetLastStop()
                       << "ms, "
                       << "update map:"
                       << " Nan "
@@ -419,6 +407,8 @@ int main(int argc, char **argv)
             keyCloudInd++;
             slow_loop.sleep();
         }
+        
+        // Create odom for visualization
         nav_msgs::Odometry odom;
         odom.header.frame_id = "camera_init";
         odom.pose.pose.position.x = tf_W_B.pos(0);
@@ -429,25 +419,28 @@ int main(int argc, char **argv)
         odom.pose.pose.orientation.y = tf_W_B.rot.y();
         odom.pose.pose.orientation.z = tf_W_B.rot.z();
         pubOdomAftMapped.publish(odom);
-        loop.sleep();
+        
+        // Increment
         cloudInd++;
+
+        loop.sleep();
     }
+
     double mean_descriptor_time   = std::accumulate(descriptor_time.begin(), descriptor_time.end(), 0) * 1.0 / descriptor_time.size();
     double mean_query_time        = std::accumulate(querying_time.begin(), querying_time.end(), 0) * 1.0 / querying_time.size();
     double mean_update_time       = std::accumulate(update_time.begin(), update_time.end(), 0) * 1.0 / update_time.size();
     double mean_translation_error = std::accumulate(t_error_vec.begin(), t_error_vec.end(), 0) * 1.0 / t_error_vec.size();
     double mean_rotation_error    = std::accumulate(r_error_vec.begin(), r_error_vec.end(), 0) * 1.0 / t_error_vec.size();
 
-    std::cout << "Total key frame number:" << keyCloudInd
-              << ", loop number:" << triggle_loop_num << std::endl;
-    std::cout << "Mean time for descriptor extraction: " << mean_descriptor_time
-              << "ms, query: " << mean_query_time
-              << "ms, update: " << mean_update_time << "ms, total: "
-              << mean_descriptor_time + mean_query_time + mean_update_time
-              << "ms" << std::endl;
-    std::cout << "Mean translation error: " << mean_translation_error
-              << std::endl;
-    std::cout << "Mean ratation error   : " << mean_rotation_error << std::endl;
+    std::cout << "Total key frame number:"   << keyCloudInd
+              << ", loop number:"            << triggle_loop_num << std::endl;
+    std::cout << "Mean time for desc extr: " << mean_descriptor_time
+              << "ms, query: "               << mean_query_time
+              << "ms, update: "              << mean_update_time
+              << "ms, total: "               << mean_descriptor_time + mean_query_time + mean_update_time
+              << "ms"                        << std::endl;
+    std::cout << "Mean translation error: "  << mean_translation_error << std::endl;
+    std::cout << "Mean ratation error   : "  << mean_rotation_error << std::endl;
 
     return 0;
 }
