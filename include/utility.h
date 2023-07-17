@@ -222,7 +222,7 @@ typedef pcl::PointCloud<PointXYZI> CloudXYZI;
 
 // typedef pcl::PointCloud<PointXYZ>::Ptr CloudXYZPtr;
 // typedef pcl::PointCloud<PointXYZI>::Ptr PointCloudPtr;
-typedef pcl::PointCloud<PointXYZI>::Ptr CloudXYZIPtr;
+// typedef pcl::PointCloud<PointXYZI>::Ptr CloudXYZIPtr;
 // typedef pcl::PointCloud<PointXYZIT>::Ptr CloudXYZITPtr;
 // typedef pcl::PointCloud<PointPose>::Ptr CloudPosePtr;
 // typedef pcl::PointCloud<PointOuster>::Ptr CloudOusterPtr;

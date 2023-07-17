@@ -1,7 +1,10 @@
-#include "include/STDesc.h"
 #include <filesystem>
+#include "include/STDesc.h"
+#include "include/utility.h"
 
-void down_sampling_voxel(pcl::PointCloud<pcl::PointXYZI> &pl_feat,
+using CloudXYZI = pcl::PointCloud<pcl::PointXYZI>;
+
+void down_sampling_voxel(CloudXYZI &pl_feat,
                          double voxel_size)
 {
     int intensity = rand() % 255;
@@ -520,7 +523,7 @@ void publish_std_pairs(
 }
 
 void STDescManager::GenerateSTDescs(
-    pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
+    CloudXYZI::Ptr &input_cloud,
     std::vector<STDesc> &stds_vec)
 {
     // step1, voxelization and plane dection
@@ -558,7 +561,7 @@ void STDescManager::GenerateSTDescs(
 }
 
 void STDescManager::GenerateSTDescsOneTime(
-    pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
+    CloudXYZI::Ptr &input_cloud,
     std::vector<STDesc> &stds_vec)
 {
     // step1, voxelization and plane dection
@@ -687,7 +690,7 @@ void STDescManager::AddSTDescs(const std::vector<STDesc> &stds_vec)
 }
 
 void STDescManager::init_voxel_map(
-    const pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
+    const CloudXYZI::Ptr &input_cloud,
     std::unordered_map<VOXEL_LOC, OctoTree *> &voxel_map)
 {
     uint plsize = input_cloud->size();
@@ -860,7 +863,7 @@ void STDescManager::getPlane(
 
 void STDescManager::corner_extractor(
     std::unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
-    const pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
+    const CloudXYZI::Ptr &input_cloud,
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points)
 {
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr prepare_corner_points(
