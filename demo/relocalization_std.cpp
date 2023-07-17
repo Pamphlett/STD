@@ -113,8 +113,6 @@ int main(int argc, char **argv)
 
 
     size_t gen_total_size = generated_poses_vec.size();
-    size_t cloudInd = 0;
-    size_t keyCloudInd = 0;
     CloudXYZIPtr temp_cloud(new CloudXYZI());
 
     std::vector<double> descriptor_time;
@@ -124,6 +122,7 @@ int main(int argc, char **argv)
     std::vector<double> r_error_vec;
     int triggle_loop_num = 0;
 
+    // Generate the data base
     if (generateDataBase)
     {
         // generate descriptor database
@@ -137,13 +136,11 @@ int main(int argc, char **argv)
                                           ori_time_str + ".pcd";
 
             CloudXYZIPtr current_cloud(new CloudXYZI());
-            CloudXYZIPtr gndtr_cloud(new CloudXYZI());
             CloudXYZIPtr cloud_registered(new CloudXYZI());
 
             Vector3d translation = generated_poses_vec[cloudInd].first;
             Matrix3d rotation = generated_poses_vec[cloudInd].second;
-            if (pcl::io::loadPCDFile<pcl::PointXYZI>(curr_lidar_path,
-                                                     *current_cloud) == -1)
+            if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *current_cloud) == -1)
             {
                 ROS_ERROR("Couldn't read scan from file. \n");
                 std::cout << "Current File Name is: "
@@ -155,8 +152,7 @@ int main(int argc, char **argv)
             curr_trans_matrix.setIdentity();
             curr_trans_matrix.topLeftCorner(3, 3) = rotation;
             curr_trans_matrix.topRightCorner(3, 1) = translation;
-            pcl::transformPointCloud<pcl::PointXYZI>(
-                *current_cloud, *current_cloud, curr_trans_matrix);
+            pcl::transformPointCloud<PointXYZI>(*current_cloud, *current_cloud, curr_trans_matrix);
 
             down_sampling_voxel(*current_cloud, config_setting.ds_size_);
             for (auto pv : current_cloud->points)
@@ -207,24 +203,17 @@ int main(int argc, char **argv)
 
     /////////////// localization //////////////
 
+
     bool flagStop = false;
 
-    /* #region Load the localization data */
 
-    cloudInd = 0;
-    std::vector<std::pair<Vector3d, Matrix3d>> localization_poses_vec;
-    std::vector<double> key_frame_times_vec;
-    std::vector<int> localization_index_vec;
-    std::vector<std::pair<Vector3d, Matrix3d>> localization_key_poses_vec;
-    load_keyframes_pose_pcd(localization_pose_path, localization_index_vec,
-                            localization_poses_vec, key_frame_times_vec);
-
-    /* #endregion Load the localization data */
+    /* #region Loading the ground truth for reference ---------------------------------------------------------------*/
 
     std::vector<std::pair<Vector3d, Matrix3d>> reference_gt_pose_vec;
     std::vector<std::string> reference_time_vec_string;
     std::vector<double> reference_time_vec;
     std::vector<int> reference_index_vec;
+
     load_CSV_pose_with_time(reference_gt_path, reference_index_vec,
                             reference_gt_pose_vec, reference_time_vec_string);
 
@@ -234,72 +223,78 @@ int main(int argc, char **argv)
         reference_time_vec.push_back(temp);
     }
 
-    std::vector<int> resulted_index = findCorrespondingFrames(key_frame_times_vec, reference_time_vec);
+    /* #endregion Loading the ground truth for reference ------------------------------------------------------------*/
 
-    if (resulted_index.size() != key_frame_times_vec.size())
-    {
-        ROS_ERROR("SIZE NOT MATCH !");
-    }
+
+    /* #region Load the localization data ---------------------------------------------------------------------------*/
+
+    std::vector<std::pair<Vector3d, Matrix3d>> localization_poses_vec;
+    std::vector<double> key_frame_times_vec;
+    std::vector<int> localization_index_vec;
+    std::vector<std::pair<Vector3d, Matrix3d>> localization_key_poses_vec;
+    load_keyframes_pose_pcd(localization_pose_path, localization_index_vec,
+                            localization_poses_vec, key_frame_times_vec);
 
     std::cout << "Sucessfully load data to be relocalized: "
               << localization_poses_vec.size() << std::endl;
 
     size_t loc_total_size = localization_poses_vec.size();
 
+    std::vector<int> resulted_index = findCorrespondingFrames(key_frame_times_vec, reference_time_vec);
+
+    if (resulted_index.size() != key_frame_times_vec.size())
+        ROS_ERROR("KF AND GNDTR SIZE NOT MATCH !");
+
+    /* #endregion Load the localization data ------------------------------------------------------------------------*/
+    
+    
     ///////////// start retrieval /////////////////
+    
     ros::Rate loop(500);
     ros::Rate slow_loop(10);
+
+    int cloudInd = 0;
+    size_t keyCloudInd = 0;
+
     while (ros::ok())
     {
         if (cloudInd >= loc_total_size)
             break;
 
         int curr_index = localization_index_vec[cloudInd];
-        std::stringstream curr_lidar_path;
-        curr_lidar_path << localization_lidar_path << "KfCloudinW_"
-                        << std::setfill('0') << std::setw(3) << curr_index
-                        << ".pcd";
+        std::string curr_lidar_path = localization_lidar_path + "/KfCloudinW_" + zeroPaddedString(curr_index, loc_total_size) + ".pcd";
 
         CloudXYZIPtr current_cloud(new CloudXYZI());
-        CloudXYZIPtr gndtr_cloud(new CloudXYZI());
         CloudXYZIPtr cloud_registered(new CloudXYZI());
 
-        Vector3d translation = localization_poses_vec[cloudInd].first;
-        Matrix3d rotation = localization_poses_vec[cloudInd].second;
-        if (pcl::io::loadPCDFile<pcl::PointXYZI>(curr_lidar_path.str(), *current_cloud) == -1)
+        myTf tf_W_B(localization_poses_vec[cloudInd].second, localization_poses_vec[cloudInd].first);
+        if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *current_cloud) == -1)
         {
-            ROS_ERROR("Couldn't read scan from file. \n");
+            ROS_ERROR(KRED "Couldn't read scan from file. \n" RESET);
             std::cout << "Current File Name is: "
                       << localization_index_vec[cloudInd] << std::endl;
             return (-1);
         }
 
-        Eigen::Matrix4d curr_trans_matrix;
-        curr_trans_matrix.setIdentity();
-        curr_trans_matrix.topLeftCorner(3, 3) = rotation;
-        curr_trans_matrix.topRightCorner(3, 1) = translation;
-        pcl::transformPointCloud<pcl::PointXYZI>(
-            *current_cloud, *current_cloud,
-            curr_trans_matrix.cast<float>().inverse());
+        pcl::transformPointCloud<PointXYZI>( *current_cloud, *current_cloud, tf_W_B.inverse().tfMat().cast<float>());
 
         down_sampling_voxel(*current_cloud, config_setting.ds_size_);
         for (auto pv : current_cloud->points)
-        {
             temp_cloud->points.push_back(pv);
-        }
 
-        // check if keyframe
+        // check each keyframe
         if (cloudInd % config_setting.sub_frame_num_ == 0)
         {
             std::cout << "Key Frame id:" << keyCloudInd
                       << ", cloud size: " << temp_cloud->size() << std::endl;
+            
             // step1. Descriptor Extraction
             auto t_descriptor_begin = std::chrono::high_resolution_clock::now();
             std::vector<STDesc> stds_vec;
             std_manager->GenerateSTDescsOneTime(temp_cloud, stds_vec);
             auto t_descriptor_end = std::chrono::high_resolution_clock::now();
-            descriptor_time.push_back(
-                time_inc(t_descriptor_end, t_descriptor_begin));
+            descriptor_time.push_back(time_inc(t_descriptor_end, t_descriptor_begin));
+            
             // step2. Searching Loop
             auto t_query_begin = std::chrono::high_resolution_clock::now();
             std::pair<int, double> search_result(-1, 0);
@@ -325,14 +320,12 @@ int main(int argc, char **argv)
                 estimated_transform.topLeftCorner(3, 3) = loop_transform.second;
                 estimated_transform.topRightCorner(3, 1) = loop_transform.first;
 
-                pcl::transformPointCloud<pcl::PointXYZI>(
-                    *temp_cloud, *cloud_registered,
-                    (estimated_transform).cast<float>());
+                pcl::transformPointCloud<PointXYZI>(*temp_cloud, *cloud_registered,(estimated_transform).cast<float>());
 
-                Eigen::Matrix4d odom_trans_matrix;
-                odom_trans_matrix.setIdentity();
-                odom_trans_matrix.topLeftCorner(3, 3) = rotation;
-                odom_trans_matrix.topRightCorner(3, 1) = translation;
+                // Eigen::Matrix4d odom_trans_matrix;
+                // odom_trans_matrix.setIdentity();
+                // odom_trans_matrix.topLeftCorner(3, 3) = tf_W_B.rot.toRotationMatrix();
+                // odom_trans_matrix.topRightCorner(3, 1) = tf_W_B.pos;
 
                 Eigen::Matrix4d estimated_pose_inW;
                 estimated_pose_inW = estimated_transform;
@@ -428,14 +421,13 @@ int main(int argc, char **argv)
         }
         nav_msgs::Odometry odom;
         odom.header.frame_id = "camera_init";
-        odom.pose.pose.position.x = translation[0];
-        odom.pose.pose.position.y = translation[1];
-        odom.pose.pose.position.z = translation[2];
-        Eigen::Quaterniond q(rotation);
-        odom.pose.pose.orientation.w = q.w();
-        odom.pose.pose.orientation.x = q.x();
-        odom.pose.pose.orientation.y = q.y();
-        odom.pose.pose.orientation.z = q.z();
+        odom.pose.pose.position.x = tf_W_B.pos(0);
+        odom.pose.pose.position.y = tf_W_B.pos(1);
+        odom.pose.pose.position.z = tf_W_B.pos(2);
+        odom.pose.pose.orientation.w = tf_W_B.rot.w();
+        odom.pose.pose.orientation.x = tf_W_B.rot.x();
+        odom.pose.pose.orientation.y = tf_W_B.rot.y();
+        odom.pose.pose.orientation.z = tf_W_B.rot.z();
         pubOdomAftMapped.publish(odom);
         loop.sleep();
         cloudInd++;

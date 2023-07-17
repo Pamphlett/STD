@@ -222,7 +222,7 @@ typedef pcl::PointCloud<PointXYZI> CloudXYZI;
 
 // typedef pcl::PointCloud<PointXYZ>::Ptr CloudXYZPtr;
 // typedef pcl::PointCloud<PointXYZI>::Ptr PointCloudPtr;
-// typedef pcl::PointCloud<PointXYZI>::Ptr CloudXYZIPtr;
+typedef pcl::PointCloud<PointXYZI>::Ptr CloudXYZIPtr;
 // typedef pcl::PointCloud<PointXYZIT>::Ptr CloudXYZITPtr;
 // typedef pcl::PointCloud<PointPose>::Ptr CloudPosePtr;
 // typedef pcl::PointCloud<PointOuster>::Ptr CloudOusterPtr;
@@ -243,9 +243,9 @@ typedef pcl::PointCloud<PointXYZI> CloudXYZI;
 
 // /* #endregion Image pointer shortened name -----*/
 
-// // Shortened typedef matching character length of Vector3d and Matrix3d
-// typedef Eigen::Quaterniond Quaternd;
-// typedef Eigen::Quaterniond Quaternf;
+// Shortened typedef matching character length of Vector3d and Matrix3d
+typedef Eigen::Quaterniond Quaternd;
+typedef Eigen::Quaterniond Quaternf;
 
 // template <typename T>
 // void pointConverter(Eigen::MatrixXd &base2LidarTf, T &point)
@@ -291,200 +291,200 @@ typedef pcl::PointCloud<PointXYZI> CloudXYZI;
 //     std::chrono::duration<double> elapsed_seconds_;
 // };
 
-// template <typename T = double>
-// struct myTf
-// {
-//     Eigen::Quaternion<T>   rot;
-//     Eigen::Matrix<T, 3, 1> pos;
+template <typename T = double>
+struct myTf
+{
+    Eigen::Quaternion<T>   rot;
+    Eigen::Matrix<T, 3, 1> pos;
 
-//     myTf Identity()
-//     {
-//         return myTf();
-//     }
+    myTf Identity()
+    {
+        return myTf();
+    }
     
-//     myTf(const myTf<T> &other)
-//     {
-//         rot = other.rot;
-//         pos = other.pos;
-//     }
+    myTf(const myTf<T> &other)
+    {
+        rot = other.rot;
+        pos = other.pos;
+    }
 
-//     myTf()
-//     {
-//         rot = Quaternd(1, 0, 0, 0);
-//         pos = Vector3d(0, 0, 0);
-//     }
+    myTf()
+    {
+        rot = Quaternd(1, 0, 0, 0);
+        pos = Vector3d(0, 0, 0);
+    }
 
-//     myTf(Eigen::Quaternion<T> rot_in, Eigen::Matrix<T, 3, 1> pos_in)
-//     {
-//         this->rot = rot_in;
-//         this->pos = pos_in;
-//     }
+    myTf(Eigen::Quaternion<T> rot_in, Eigen::Matrix<T, 3, 1> pos_in)
+    {
+        this->rot = rot_in;
+        this->pos = pos_in;
+    }
 
-//     myTf(Eigen::Matrix<T, 3, 3> rot_in, Eigen::Matrix<T, 3, 1> pos_in)
-//     {
-//         this->rot = Quaternion<T>(rot_in);
-//         this->pos = pos_in;
-//     }
+    myTf(Eigen::Matrix<T, 3, 3> rot_in, Eigen::Matrix<T, 3, 1> pos_in)
+    {
+        this->rot = Quaternion<T>(rot_in);
+        this->pos = pos_in;
+    }
 
-//     template <typename Tin>
-//     myTf(Eigen::Matrix<Tin, 4, 4> tfMat)
-//     {
-//         Eigen::Matrix<T, 3, 3> M = tfMat.block(0, 0, 3, 3).template cast<T>();
-//         this->rot = Quaternion<T>(M);
-//         this->pos = tfMat.block(0, 3, 3, 1).template cast<T>();
-//     }
+    template <typename Tin>
+    myTf(Eigen::Matrix<Tin, 4, 4> tfMat)
+    {
+        Eigen::Matrix<T, 3, 3> M = tfMat.block(0, 0, 3, 3).template cast<T>();
+        this->rot = Quaternion<T>(M);
+        this->pos = tfMat.block(0, 3, 3, 1).template cast<T>();
+    }
 
-//     myTf(PointPose point)
-//     {
-//         this->rot = Quaternion<T>(point.qw, point.qx, point.qy, point.qz);
-//         this->pos << point.x, point.y, point.z;
-//     }
+    // myTf(PointPose point)
+    // {
+    //     this->rot = Quaternion<T>(point.qw, point.qx, point.qy, point.qz);
+    //     this->pos << point.x, point.y, point.z;
+    // }
 
-//     myTf(nav_msgs::Odometry odom)
-//     {
-//         this->rot = Quaternion<T>(odom.pose.pose.orientation.w,
-//                                     odom.pose.pose.orientation.x,
-//                                     odom.pose.pose.orientation.y,
-//                                     odom.pose.pose.orientation.z);
+    myTf(nav_msgs::Odometry odom)
+    {
+        this->rot = Quaternion<T>(odom.pose.pose.orientation.w,
+                                    odom.pose.pose.orientation.x,
+                                    odom.pose.pose.orientation.y,
+                                    odom.pose.pose.orientation.z);
                                     
-//         this->pos << odom.pose.pose.position.x,
-//                      odom.pose.pose.position.y,
-//                      odom.pose.pose.position.z;
-//     }
+        this->pos << odom.pose.pose.position.x,
+                     odom.pose.pose.position.y,
+                     odom.pose.pose.position.z;
+    }
 
-//     myTf(Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform)
-//     {
-//         this->rot = Eigen::Quaternion<T>{transform.linear()}.normalized();
-//         this->pos = transform.translation();
-//     }
+    myTf(Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform)
+    {
+        this->rot = Eigen::Quaternion<T>{transform.linear()}.normalized();
+        this->pos = transform.translation();
+    }
 
-//     Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform() const
-//     {
-//         Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform;
-//         transform.linear() = rot.normalized().toRotationMatrix();
-//         transform.translation() = pos;
-//         return transform;
-//     }
+    Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform() const
+    {
+        Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform;
+        transform.linear() = rot.normalized().toRotationMatrix();
+        transform.translation() = pos;
+        return transform;
+    }
 
-//     Eigen::Matrix<T, 4, 4> tfMat() const
-//     {
-//         Eigen::Matrix<T, 4, 4> M = Matrix<T, 4, 4>::Identity();
-//         M.block(0, 0, 3, 3) = rot.normalized().toRotationMatrix();
-//         M.block(0, 3, 3, 1) = pos;
-//         return M;
-//     }
+    Eigen::Matrix<T, 4, 4> tfMat() const
+    {
+        Eigen::Matrix<T, 4, 4> M = Matrix<T, 4, 4>::Identity();
+        M.block(0, 0, 3, 3) = rot.normalized().toRotationMatrix();
+        M.block(0, 3, 3, 1) = pos;
+        return M;
+    }
 
-//     PointXYZI Point3D() const
-//     {
-//         PointXYZI p;
+    PointXYZI Point3D() const
+    {
+        PointXYZI p;
 
-//         p.x = (float)pos.x();
-//         p.y = (float)pos.y();
-//         p.z = (float)pos.z();
+        p.x = (float)pos.x();
+        p.y = (float)pos.y();
+        p.z = (float)pos.z();
 
-//         p.intensity = -1;
+        p.intensity = -1;
 
-//         return p;
-//     }
+        return p;
+    }
     
-//     PointPose Pose6D() const
-//     {
-//         PointPose p;
+    // PointPose Pose6D() const
+    // {
+    //     PointPose p;
 
-//         p.t = -1;
+    //     p.t = -1;
 
-//         p.x = (float)pos.x();
-//         p.y = (float)pos.y();
-//         p.z = (float)pos.z();
+    //     p.x = (float)pos.x();
+    //     p.y = (float)pos.y();
+    //     p.z = (float)pos.z();
 
-//         p.qx = (float)rot.x();
-//         p.qy = (float)rot.y();
-//         p.qz = (float)rot.z();
-//         p.qw = (float)rot.w();
+    //     p.qx = (float)rot.x();
+    //     p.qy = (float)rot.y();
+    //     p.qz = (float)rot.z();
+    //     p.qw = (float)rot.w();
 
-//         p.intensity = -1;
+    //     p.intensity = -1;
 
-//         return p;
-//     }
+    //     return p;
+    // }
 
-//     PointPose Pose6D(double time) const
-//     {
-//         PointPose p;
+    // PointPose Pose6D(double time) const
+    // {
+    //     PointPose p;
 
-//         p.t = time;
+    //     p.t = time;
         
-//         p.x = (float)pos.x();
-//         p.y = (float)pos.y();
-//         p.z = (float)pos.z();
+    //     p.x = (float)pos.x();
+    //     p.y = (float)pos.y();
+    //     p.z = (float)pos.z();
 
-//         p.qx = (float)rot.x();
-//         p.qy = (float)rot.y();
-//         p.qz = (float)rot.z();
-//         p.qw = (float)rot.w();
+    //     p.qx = (float)rot.x();
+    //     p.qy = (float)rot.y();
+    //     p.qz = (float)rot.z();
+    //     p.qw = (float)rot.w();
 
-//         p.intensity = -1;
+    //     p.intensity = -1;
 
-//         return p;
-//     }
+    //     return p;
+    // }
 
-//     // template <typename Tout = double>
-//     // Sophus::SE3<Tout> getSE3() const
-//     // {
-//     //     return Sophus::SE3<Tout>(this->rot.template cast<Tout>(),
-//     //                              this->pos.template cast<Tout>());
-//     // }
+    // template <typename Tout = double>
+    // Sophus::SE3<Tout> getSE3() const
+    // {
+    //     return Sophus::SE3<Tout>(this->rot.template cast<Tout>(),
+    //                              this->pos.template cast<Tout>());
+    // }
 
-//     double roll() const
-//     {
-//         return atan2(rot.x()*rot.w() + rot.y()*rot.z(), 0.5 - (rot.x()*rot.x() + rot.y()*rot.y()))/M_PI*180.0;
-//     }
+    double roll() const
+    {
+        return atan2(rot.x()*rot.w() + rot.y()*rot.z(), 0.5 - (rot.x()*rot.x() + rot.y()*rot.y()))/M_PI*180.0;
+    }
 
-//     double pitch() const
-//     {
-//         return asin(-2*(rot.x()*rot.z() - rot.w()*rot.y()))/M_PI*180.0;
-//     }
+    double pitch() const
+    {
+        return asin(-2*(rot.x()*rot.z() - rot.w()*rot.y()))/M_PI*180.0;
+    }
 
-//     double yaw() const
-//     {
-//         return atan2(rot.x()*rot.y() + rot.w()*rot.z(), 0.5 - (rot.y()*rot.y() + rot.z()*rot.z()))/M_PI*180.0;
-//     }
+    double yaw() const
+    {
+        return atan2(rot.x()*rot.y() + rot.w()*rot.z(), 0.5 - (rot.y()*rot.y() + rot.z()*rot.z()))/M_PI*180.0;
+    }
 
-//     myTf inverse() const
-//     {
-//         Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform_inv = this->transform().inverse();
-//         myTf tf_inv;
-//         tf_inv.rot = transform_inv.linear();
-//         tf_inv.pos = transform_inv.translation();
-//         return tf_inv;
-//     }
+    myTf inverse() const
+    {
+        Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform_inv = this->transform().inverse();
+        myTf tf_inv;
+        tf_inv.rot = transform_inv.linear();
+        tf_inv.pos = transform_inv.translation();
+        return tf_inv;
+    }
 
-//     myTf operator*(const myTf &other) const
-//     {
-//         Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform_out = this->transform() * other.transform();
-//         return myTf(transform_out);
-//     }
+    myTf operator*(const myTf &other) const
+    {
+        Eigen::Transform<T, 3, Eigen::TransformTraits::Affine> transform_out = this->transform() * other.transform();
+        return myTf(transform_out);
+    }
 
-//     Vector3d operator*(const Vector3d &v) const
-//     {
-//         return (rot*v + pos);
-//     }
+    Vector3d operator*(const Vector3d &v) const
+    {
+        return (rot*v + pos);
+    }
 
-//     template <typename NewType>
-//     myTf<NewType> cast() const
-//     {
-//         myTf<NewType> tf_new{this->rot.template cast<NewType>(), this->pos.template cast<NewType>()};
-//         return tf_new;
-//     }
+    template <typename NewType>
+    myTf<NewType> cast() const
+    {
+        myTf<NewType> tf_new{this->rot.template cast<NewType>(), this->pos.template cast<NewType>()};
+        return tf_new;
+    }
 
-//     friend std::ostream &operator<<(std::ostream &os, const myTf &tf)
-//     {
-//         os << tf.pos.x() << " " << tf.pos.y() << " " << tf.pos.z() << " " << tf.rot.w() << " "
-//            << tf.rot.x() << " " << tf.rot.y() << " " << tf.rot.z();
-//         return os;
-//     }
-// }; // class myTf
+    friend std::ostream &operator<<(std::ostream &os, const myTf &tf)
+    {
+        os << tf.pos.x() << " " << tf.pos.y() << " " << tf.pos.z() << " " << tf.rot.w() << " "
+           << tf.rot.x() << " " << tf.rot.y() << " " << tf.rot.z();
+        return os;
+    }
+}; // class myTf
 
-// typedef myTf<> mytf;
+typedef myTf<> mytf;
 
 // class ImuSample
 // {
@@ -1453,46 +1453,46 @@ typedef pcl::PointCloud<PointXYZI> CloudXYZI;
 //     return files;
 // }
 
-// inline string zeroPaddedString(int num, int max)
-// {
-//     int max_digit = 0;
-//     int num_digit = 0;
+inline string zeroPaddedString(int num, int max)
+{
+    int max_digit = 0;
+    int num_digit = 0;
 
-//     while(true)
-//     {
-//         if (num == 0)
-//         {
-//             num_digit = 1;
-//             break;
-//         }
+    while(true)
+    {
+        if (num == 0)
+        {
+            num_digit = 1;
+            break;
+        }
         
-//         if (pow(10, num_digit) > num)
-//             break;
-//         else
-//             num_digit++;
-//     }
+        if (pow(10, num_digit) > num)
+            break;
+        else
+            num_digit++;
+    }
 
-//     while(true)
-//     {
-//         if (max == 0)
-//         {
-//             max_digit = 1;
-//             break;
-//         }
+    while(true)
+    {
+        if (max == 0)
+        {
+            max_digit = 1;
+            break;
+        }
         
-//         if (pow(10, max_digit) > max)
-//             break;
-//         else
-//             max_digit++;
-//     }
+        if (pow(10, max_digit) > max)
+            break;
+        else
+            max_digit++;
+    }
 
-//     int padded_zero = max_digit - num_digit;
+    int padded_zero = max_digit - num_digit;
 
-//     string num_str;
-//     for (int i = 0; i < padded_zero; i++)
-//         num_str += "0";
+    string num_str;
+    for (int i = 0; i < padded_zero; i++)
+        num_str += "0";
 
-//     return (num_str + std::to_string(num));
-// }
+    return (num_str + std::to_string(num));
+}
 
 #endif
