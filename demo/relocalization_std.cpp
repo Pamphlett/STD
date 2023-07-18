@@ -9,41 +9,18 @@ using namespace pcl;
 using namespace Eigen;
 using namespace Util;
 
-// Read KITTI data
-std::vector<float> read_lidar_data(const std::string lidar_data_path)
-{
-    std::ifstream lidar_data_file;
-    lidar_data_file.open(lidar_data_path,
-                         std::ifstream::in | std::ifstream::binary);
-    if (!lidar_data_file)
-    {
-        std::cout << "Read End..." << std::endl;
-        std::vector<float> nan_data;
-        return nan_data;
-        // exit(-1);
-    }
-    lidar_data_file.seekg(0, std::ios::end);
-    const size_t num_elements = lidar_data_file.tellg() / sizeof(float);
-    lidar_data_file.seekg(0, std::ios::beg);
-
-    std::vector<float> lidar_data_buffer(num_elements);
-    lidar_data_file.read(reinterpret_cast<char *>(&lidar_data_buffer[0]),
-                         num_elements * sizeof(float));
-    return lidar_data_buffer;
-}
-
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "demo_ntu");
     ros::NodeHandle nh;
 
+    
+    // Read the config
+    ConfigSetting config_setting;
+    read_parameters(nh, config_setting);
 
-    /* #region For online validation --------------------------------------------------------------------------------*/
-
-    std::string reference_gt_path = "";
-    nh.param<std::string>("reference_gt_path", reference_gt_path, "");
-
-    /* #endregion For online validation -----------------------------------------------------------------------------*/
+    // Create the detector
+    STDescManager *std_manager = new STDescManager(config_setting);
 
 
     /* #region Declaration to database on prior map -----------------------------------------------------------------*/
@@ -63,47 +40,11 @@ int main(int argc, char **argv)
 
     string database_type = (generated_pose_path.find(string(".csv")) != std::string::npos) ? "csv" : "pcd";
 
-    /* #endregion Declaration to database on prior map --------------------------------------------------------------*/
-
-
-    /* #region Recorded data of online localization -----------------------------------------------------------------*/
-
-    std::string localization_lidar_path = "";
-    nh.param<std::string>("localization_lidar_path", localization_lidar_path, "");
-
-    std::string localization_pose_path = "";
-    nh.param<std::string>("localization_pose_path", localization_pose_path, "");
-
-    /* #endregion Recorded data of online localization --------------------------------------------------------------*/
-
-
-    // Read the config
-    ConfigSetting config_setting;
-    read_parameters(nh, config_setting);
-
-
-    /* #region Create the publishers --------------------------------------------------------------------------------*/
-
-    ros::Publisher pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_init", 10);
-    ros::Publisher pubRegisterCloud = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100);
-    ros::Publisher pubCurrentCloud  = nh.advertise<sensor_msgs::PointCloud2>("/cloud_current", 100);
-    ros::Publisher pubCurrentCorner = nh.advertise<sensor_msgs::PointCloud2>("/cloud_key_points", 100);
-    ros::Publisher pubMatchedCloud  = nh.advertise<sensor_msgs::PointCloud2>("/cloud_matched", 100);
-    ros::Publisher pubMatchedCorner = nh.advertise<sensor_msgs::PointCloud2>("/cloud_matched_key_points", 100);
-    ros::Publisher pubSTD           = nh.advertise<visualization_msgs::MarkerArray>("descriptor_line", 10);
-
-    /* #endregion Create the publishers -----------------------------------------------------------------------------*/
-
-
-    // Create the detector
-    STDescManager *std_manager = new STDescManager(config_setting);
-
-
     /* #region Generate the data base -------------------------------------------------------------------------------*/
 
     if (generateDataBase)
     {
-        /* #region Load the database ------------------------------------------------------------------------------------*/
+        /* #region Load the poses -----------------------------------------------------------------------------------*/
 
         std::vector<int> generated_index_vec;
         std::vector<std::pair<Vector3d, Matrix3d>> generated_poses_vec;
@@ -128,10 +69,9 @@ int main(int argc, char **argv)
         std::cout << "Sucessfully load pose with number: "
                   << generated_poses_vec.size() << std::endl;
 
-        /* #endregion load the database ---------------------------------------------------------------------------------*/
+        /* #endregion load the poses --------------------------------------------------------------------------------*/
 
         size_t gen_total_size = generated_poses_vec.size();
-        CloudXYZIPtr temp_cloud(new CloudXYZI());
 
         // generate descriptor database
         printf("Generating descriptors ...");
@@ -161,33 +101,17 @@ int main(int argc, char **argv)
                 if (cloudInd % config_setting.sub_frame_num_ == 0)
                 {
                     // step1. Descriptor Extraction
-                    // auto t_descriptor_begin =
-                    // std::chrono::high_resolution_clock::now();
                     std::vector<STDesc> stds_vec;
                     std_manager->GenerateSTDescs(current_cloud, stds_vec);
 
                     // step3. Add descriptors to the database
-                    // auto t_map_update_begin =
-                    // std::chrono::high_resolution_clock::now();
                     std_manager->AddSTDescs(stds_vec);
-                    // auto t_map_update_end =
-                    // std::chrono::high_resolution_clock::now();
-                    // update_time.push_back(
-                    //     time_inc(t_map_update_end, t_map_update_begin));
-
-                    // CloudXYZI save_key_cloud;
-                    // save_key_cloud = *temp_cloud;
-
-                    // std_manager->key_cloud_vec_.push_back(
-                    //     save_key_cloud.makeShared());
-                    // generated_key_poses_vec.push_back(generated_poses_vec[cloudInd]);
                 }
 
                 if (cloudInd % 100 == 0)
                 {
                     ROS_INFO("Generated %d frames", cloudInd);
                 }
-                // temp_cloud->clear();
             }
         }
         else
@@ -225,7 +149,6 @@ int main(int argc, char **argv)
                 }
 
                 ROS_INFO("Generated %d frames", cloudInd);
-                // temp_cloud->clear();
             }
         }
 
@@ -236,11 +159,38 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    /* #endregion Generate the data base ----------------------------------------------------------------------------*/
+
+    /* #endregion Declaration to database on prior map --------------------------------------------------------------*/
+    
     // load STD descriptors in storage
     std_manager->loadExistingSTD(descriptor_path);
     ROS_INFO("Loaded saved STD.");
+    
 
-    /* #endregion Generate the data base -------------------------------------------------------------------------------*/
+    /* #region Recorded data of online localization -----------------------------------------------------------------*/
+
+    std::string localization_lidar_path = "";
+    nh.param<std::string>("localization_lidar_path", localization_lidar_path, "");
+
+    std::string localization_pose_path = "";
+    nh.param<std::string>("localization_pose_path", localization_pose_path, "");
+
+    /* #endregion Recorded data of online localization --------------------------------------------------------------*/
+
+
+    /* #region Create the publishers --------------------------------------------------------------------------------*/
+
+    ros::Publisher pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/aft_mapped_to_init", 10);
+    ros::Publisher pubRegisterCloud = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100);
+    ros::Publisher pubCurrentCloud  = nh.advertise<sensor_msgs::PointCloud2>("/cloud_current", 100);
+    ros::Publisher pubCurrentCorner = nh.advertise<sensor_msgs::PointCloud2>("/cloud_key_points", 100);
+    ros::Publisher pubMatchedCloud  = nh.advertise<sensor_msgs::PointCloud2>("/cloud_matched", 100);
+    ros::Publisher pubMatchedCorner = nh.advertise<sensor_msgs::PointCloud2>("/cloud_matched_key_points", 100);
+    ros::Publisher pubSTD           = nh.advertise<visualization_msgs::MarkerArray>("descriptor_line", 10);
+
+    /* #endregion Create the publishers -----------------------------------------------------------------------------*/
+
 
 
     /////////////// localization //////////////
@@ -251,6 +201,9 @@ int main(int argc, char **argv)
 
 
     /* #region Loading the ground truth for reference ---------------------------------------------------------------*/
+
+    std::string reference_gt_path = "";
+    nh.param<std::string>("reference_gt_path", reference_gt_path, "");
 
     std::vector<int> reference_index_vec;
     std::vector<std::pair<Vector3d, Matrix3d>> reference_gt_pose_vec;
@@ -429,7 +382,6 @@ int main(int argc, char **argv)
                 // }
             }
 
-            // temp_cloud->clear();
             keyCloudInd++;
             slow_loop.sleep();
         }
