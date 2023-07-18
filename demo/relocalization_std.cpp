@@ -156,10 +156,7 @@ int main(int argc, char **argv)
 
                 myTf tf_W_B(generated_poses_vec[cloudInd].second, generated_poses_vec[cloudInd].first);
                 pcl::transformPointCloud<PointXYZI>(*current_cloud, *current_cloud, tf_W_B.cast<float>().tfMat());
-
                 down_sampling_voxel(*current_cloud, config_setting.ds_size_);
-                for (auto pv : current_cloud->points)
-                    temp_cloud->points.push_back(pv);
 
                 if (cloudInd % config_setting.sub_frame_num_ == 0)
                 {
@@ -167,7 +164,7 @@ int main(int argc, char **argv)
                     // auto t_descriptor_begin =
                     // std::chrono::high_resolution_clock::now();
                     std::vector<STDesc> stds_vec;
-                    std_manager->GenerateSTDescs(temp_cloud, stds_vec);
+                    std_manager->GenerateSTDescs(current_cloud, stds_vec);
 
                     // step3. Add descriptors to the database
                     // auto t_map_update_begin =
@@ -190,7 +187,7 @@ int main(int argc, char **argv)
                 {
                     ROS_INFO("Generated %d frames", cloudInd);
                 }
-                temp_cloud->clear();
+                // temp_cloud->clear();
             }
         }
         else
@@ -213,26 +210,22 @@ int main(int argc, char **argv)
                     return (-1);
                 }
 
-                myTf tf_W_B(generated_poses_vec[cloudInd].second, generated_poses_vec[cloudInd].first);
-                pcl::transformPointCloud<PointXYZI>(*current_cloud, *current_cloud, tf_W_B.cast<float>().tfMat());
-
+                // myTf tf_W_B(generated_poses_vec[cloudInd].second, generated_poses_vec[cloudInd].first);
+                // pcl::transformPointCloud<PointXYZI>(*current_cloud, *current_cloud, tf_W_B.cast<float>().tfMat());
                 down_sampling_voxel(*current_cloud, config_setting.ds_size_);
-
-                for (auto pv : current_cloud->points)
-                    temp_cloud->points.push_back(pv);
 
                 if (cloudInd % config_setting.sub_frame_num_ == 0)
                 {
                     // step1. Descriptor Extraction
                     std::vector<STDesc> stds_vec;
-                    std_manager->GenerateSTDescs(temp_cloud, stds_vec);
+                    std_manager->GenerateSTDescs(current_cloud, stds_vec);
 
                     // step3. Add descriptors to the database
                     std_manager->AddSTDescs(stds_vec);
                 }
 
                 ROS_INFO("Generated %d frames", cloudInd);
-                temp_cloud->clear();
+                // temp_cloud->clear();
             }
         }
 
@@ -374,7 +367,8 @@ int main(int argc, char **argv)
 
                 // Compute Pose Estimation Error
                 int match_frame = search_result.first;
-                std_manager->PlaneGeomrtricIcp(std_manager->current_plane_cloud_, std_manager->plane_cloud_vec_[match_frame], loop_transform);
+                std_manager->PlaneGeomrtricIcp(std_manager->current_plane_cloud_,
+                                               std_manager->plane_cloud_vec_[match_frame], loop_transform);
 
                 myTf tf_W_B_est(loop_transform.second, loop_transform.first);
 
