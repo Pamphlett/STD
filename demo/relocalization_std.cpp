@@ -53,13 +53,15 @@ int main(int argc, char **argv)
     nh.param<std::string>("descriptor_file_path", descriptor_path, "");
 
     bool generateDataBase;
-    nh.param<bool>("generated_descriptor_database", generateDataBase, false);
+    nh.param<bool>("generate_descriptor_database", generateDataBase, false);
 
     std::string generated_lidar_path = "";
     nh.param<std::string>("generated_lidar_path", generated_lidar_path, "");
 
     std::string generated_pose_path = "";
     nh.param<std::string>("generated_pose_path", generated_pose_path, "");
+
+    string database_type = (generated_pose_path.find(string(".csv")) != std::string::npos) ? "csv" : "pcd";
 
     /* #endregion Declaration to database on prior map --------------------------------------------------------------*/
 
@@ -75,7 +77,7 @@ int main(int argc, char **argv)
     /* #endregion Recorded data of online localization --------------------------------------------------------------*/
 
 
-    // Read the config from
+    // Read the config
     ConfigSetting config_setting;
     read_parameters(nh, config_setting);
 
@@ -93,102 +95,145 @@ int main(int argc, char **argv)
     /* #endregion Create the publishers -----------------------------------------------------------------------------*/
 
 
-    /* #region Load the database ------------------------------------------------------------------------------------*/
-
-    std::vector<int> generated_index_vec;
-    std::vector<std::pair<Vector3d, Matrix3d>> generated_poses_vec;
-    std::vector<std::string> generated_times_vec;
-    std::vector<std::pair<Vector3d, Matrix3d>>generated_key_poses_vec;
-
-    load_CSV_pose_with_time(generated_pose_path, generated_index_vec,
-                            generated_poses_vec, generated_times_vec);
-
-    std::cout << "Sucessfully load pose with number: "
-              << generated_poses_vec.size() << std::endl;
-
-    /* #endregion load the database ---------------------------------------------------------------------------------*/
-
-
     // Create the detector
     STDescManager *std_manager = new STDescManager(config_setting);
 
 
-    size_t gen_total_size = generated_poses_vec.size();
-    CloudXYZIPtr temp_cloud(new CloudXYZI());
+    /* #region Generate the data base -------------------------------------------------------------------------------*/
 
-    std::vector<double> descriptor_time;
-    std::vector<double> querying_time;
-    std::vector<double> update_time;
-    std::vector<double> t_error_vec;
-    std::vector<double> r_error_vec;
-    int triggle_loop_num = 0;
-
-    // Generate the data base
     if (generateDataBase)
     {
-        // generate descriptor database
-        ROS_INFO("Generating descriptors ...");
-        for (int cloudInd = 0; cloudInd < gen_total_size; ++cloudInd)
+        /* #region Load the database ------------------------------------------------------------------------------------*/
+
+        std::vector<int> generated_index_vec;
+        std::vector<std::pair<Vector3d, Matrix3d>> generated_poses_vec;
+        std::vector<std::string> generated_times_vec;
+        std::vector<std::pair<Vector3d, Matrix3d>>generated_key_poses_vec;
+
+        if (database_type == "csv")
         {
-            std::string ori_time_str = generated_times_vec[cloudInd];
-            std::replace(ori_time_str.begin(), ori_time_str.end(), '.', '_');
-            std::string curr_lidar_path = generated_lidar_path + "cloud_" +
-                                          std::to_string(cloudInd + 1) + "_" +
-                                          ori_time_str + ".pcd";
+            load_CSV_pose_with_time(generated_pose_path, generated_index_vec,
+                                    generated_poses_vec, generated_times_vec);
+        }
+        else
+        {
+            std::vector<double> generated_times_vec_;
+            load_keyframes_pose_pcd(generated_pose_path, generated_index_vec,
+                                    generated_poses_vec, generated_times_vec_);
+            for(int idx : generated_index_vec)
+                generated_times_vec.push_back(std::to_string(idx));
+        }
 
-            CloudXYZIPtr current_cloud(new CloudXYZI());
-            CloudXYZIPtr cloud_registered(new CloudXYZI());
 
-            Vector3d translation = generated_poses_vec[cloudInd].first;
-            Matrix3d rotation = generated_poses_vec[cloudInd].second;
-            if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *current_cloud) == -1)
+        std::cout << "Sucessfully load pose with number: "
+                  << generated_poses_vec.size() << std::endl;
+
+        /* #endregion load the database ---------------------------------------------------------------------------------*/
+
+        size_t gen_total_size = generated_poses_vec.size();
+        CloudXYZIPtr temp_cloud(new CloudXYZI());
+
+        // generate descriptor database
+        printf("Generating descriptors ...");
+
+        if(database_type == "csv")
+        {
+            for (int cloudInd = 0; cloudInd < gen_total_size; ++cloudInd)
             {
-                ROS_ERROR("Couldn't read scan from file. \n");
-                std::cout << "Current File Name is: "
-                          << generated_index_vec[cloudInd] << std::endl;
-                return (-1);
+                std::string ori_time_str = generated_times_vec[cloudInd];
+                std::replace(ori_time_str.begin(), ori_time_str.end(), '.', '_');
+                std::string curr_lidar_path = generated_lidar_path + "cloud_" + std::to_string(cloudInd + 1) + "_" + ori_time_str + ".pcd";
+
+                CloudXYZIPtr current_cloud(new CloudXYZI());
+
+                if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *current_cloud) == -1)
+                {
+                    ROS_ERROR("Couldn't read scan from file. \n");
+                    std::cout << "Current File Name is: "
+                              << generated_index_vec[cloudInd] << std::endl;
+                    return (-1);
+                }
+
+                myTf tf_W_B(generated_poses_vec[cloudInd].second, generated_poses_vec[cloudInd].first);
+                pcl::transformPointCloud<PointXYZI>(*current_cloud, *current_cloud, tf_W_B.cast<float>().tfMat());
+
+                down_sampling_voxel(*current_cloud, config_setting.ds_size_);
+                for (auto pv : current_cloud->points)
+                    temp_cloud->points.push_back(pv);
+
+                if (cloudInd % config_setting.sub_frame_num_ == 0)
+                {
+                    // step1. Descriptor Extraction
+                    // auto t_descriptor_begin =
+                    // std::chrono::high_resolution_clock::now();
+                    std::vector<STDesc> stds_vec;
+                    std_manager->GenerateSTDescs(temp_cloud, stds_vec);
+
+                    // step3. Add descriptors to the database
+                    // auto t_map_update_begin =
+                    // std::chrono::high_resolution_clock::now();
+                    std_manager->AddSTDescs(stds_vec);
+                    // auto t_map_update_end =
+                    // std::chrono::high_resolution_clock::now();
+                    // update_time.push_back(
+                    //     time_inc(t_map_update_end, t_map_update_begin));
+
+                    // CloudXYZI save_key_cloud;
+                    // save_key_cloud = *temp_cloud;
+
+                    // std_manager->key_cloud_vec_.push_back(
+                    //     save_key_cloud.makeShared());
+                    // generated_key_poses_vec.push_back(generated_poses_vec[cloudInd]);
+                }
+
+                if (cloudInd % 100 == 0)
+                {
+                    ROS_INFO("Generated %d frames", cloudInd);
+                }
+                temp_cloud->clear();
             }
-
-            Eigen::Matrix4d curr_trans_matrix;
-            curr_trans_matrix.setIdentity();
-            curr_trans_matrix.topLeftCorner(3, 3) = rotation;
-            curr_trans_matrix.topRightCorner(3, 1) = translation;
-            pcl::transformPointCloud<PointXYZI>(*current_cloud, *current_cloud, curr_trans_matrix);
-
-            down_sampling_voxel(*current_cloud, config_setting.ds_size_);
-            for (auto pv : current_cloud->points)
-                temp_cloud->points.push_back(pv);
-
-            if (cloudInd % config_setting.sub_frame_num_ == 0)
+        }
+        else
+        {
+            for (int cloudInd = 0; cloudInd < gen_total_size; ++cloudInd)
             {
-                // step1. Descriptor Extraction
-                // auto t_descriptor_begin =
-                // std::chrono::high_resolution_clock::now();
-                std::vector<STDesc> stds_vec;
-                std_manager->GenerateSTDescs(temp_cloud, stds_vec);
+                std::string ori_time_str = generated_times_vec[cloudInd];
+                std::replace(ori_time_str.begin(), ori_time_str.end(), '.', '_');
+                std::string curr_lidar_path = generated_lidar_path + "KfFullPcl_" + std::to_string(cloudInd) + ".pcd";
 
-                // step3. Add descriptors to the database
-                // auto t_map_update_begin =
-                // std::chrono::high_resolution_clock::now();
-                std_manager->AddSTDescs(stds_vec);
-                // auto t_map_update_end =
-                // std::chrono::high_resolution_clock::now();
-                // update_time.push_back(
-                //     time_inc(t_map_update_end, t_map_update_begin));
+                printf("Reading scan: %s\n", curr_lidar_path.c_str());
 
-                // CloudXYZI save_key_cloud;
-                // save_key_cloud = *temp_cloud;
+                CloudXYZIPtr current_cloud(new CloudXYZI());
 
-                // std_manager->key_cloud_vec_.push_back(
-                //     save_key_cloud.makeShared());
-                // generated_key_poses_vec.push_back(generated_poses_vec[cloudInd]);
-            }
+                if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *current_cloud) == -1)
+                {
+                    ROS_ERROR("Couldn't read scan from file. \n");
+                    std::cout << "Current File Name is: "
+                              << generated_index_vec[cloudInd] << std::endl;
+                    return (-1);
+                }
 
-            if (cloudInd % 100 == 0)
-            {
+                myTf tf_W_B(generated_poses_vec[cloudInd].second, generated_poses_vec[cloudInd].first);
+                pcl::transformPointCloud<PointXYZI>(*current_cloud, *current_cloud, tf_W_B.cast<float>().tfMat());
+
+                down_sampling_voxel(*current_cloud, config_setting.ds_size_);
+
+                for (auto pv : current_cloud->points)
+                    temp_cloud->points.push_back(pv);
+
+                if (cloudInd % config_setting.sub_frame_num_ == 0)
+                {
+                    // step1. Descriptor Extraction
+                    std::vector<STDesc> stds_vec;
+                    std_manager->GenerateSTDescs(temp_cloud, stds_vec);
+
+                    // step3. Add descriptors to the database
+                    std_manager->AddSTDescs(stds_vec);
+                }
+
                 ROS_INFO("Generated %d frames", cloudInd);
+                temp_cloud->clear();
             }
-            temp_cloud->clear();
         }
 
         // save generated things
@@ -199,30 +244,31 @@ int main(int argc, char **argv)
     }
 
     // load STD descriptors in storage
-    std_manager->loadExistingSTD(descriptor_path, 2965);
+    std_manager->loadExistingSTD(descriptor_path);
     ROS_INFO("Loaded saved STD.");
+
+    /* #endregion Generate the data base -------------------------------------------------------------------------------*/
+
 
     /////////////// localization //////////////
 
 
     bool flagStop = false;
+    CloudXYZIPtr cloud_registered(new CloudXYZI());
 
 
     /* #region Loading the ground truth for reference ---------------------------------------------------------------*/
 
+    std::vector<int> reference_index_vec;
     std::vector<std::pair<Vector3d, Matrix3d>> reference_gt_pose_vec;
     std::vector<std::string> reference_time_vec_string;
     std::vector<double> reference_time_vec;
-    std::vector<int> reference_index_vec;
 
     load_CSV_pose_with_time(reference_gt_path, reference_index_vec,
                             reference_gt_pose_vec, reference_time_vec_string);
 
     for (auto itr : reference_time_vec_string)
-    {
-        double temp = std::stod(itr);
-        reference_time_vec.push_back(temp);
-    }
+        reference_time_vec.push_back(std::stod(itr));
 
     /* #endregion Loading the ground truth for reference ------------------------------------------------------------*/
 
@@ -236,7 +282,7 @@ int main(int argc, char **argv)
     load_keyframes_pose_pcd(localization_pose_path, localization_index_vec,
                             localization_poses_vec, key_frame_times_vec);
 
-    std::cout << "Sucessfully load data to be relocalized: "
+    std::cout << "Sucessfully loaded pointclouds to be relocalized: "
               << localization_poses_vec.size() << std::endl;
 
     size_t loc_total_size = localization_poses_vec.size();
@@ -253,6 +299,13 @@ int main(int argc, char **argv)
     
     ros::Rate loop(500);
     ros::Rate slow_loop(10);
+
+    std::vector<double> descriptor_time;
+    std::vector<double> querying_time;
+    std::vector<double> update_time;
+    std::vector<double> t_error_vec;
+    std::vector<double> r_error_vec;
+    int triggle_loop_num = 0;
 
     int cloudInd = 0;
     size_t keyCloudInd = 0;
@@ -294,7 +347,7 @@ int main(int argc, char **argv)
         // check if keyframe
         if (cloudInd % config_setting.sub_frame_num_ == 0)
         {
-            std::cout << "Key Frame id:"  << keyCloudInd
+            std::cout << "Key Frame id: " << keyCloudInd
                       << ", cloud size: " << current_cloud->size() << std::endl;
             
             // step1. Descriptor Extraction
@@ -308,7 +361,7 @@ int main(int argc, char **argv)
             
             // step2. Searching Loop
             
-            TicToc tt_query_begin;
+            TicToc tt_query;
 
             std::pair<int, double> search_result(-1, 0);
             std::pair<Vector3d, Matrix3d> loop_transform = make_pair(Vector3d(0, 0, 0), Matrix3d::Identity());
@@ -321,8 +374,7 @@ int main(int argc, char **argv)
 
                 // Compute Pose Estimation Error
                 int match_frame = search_result.first;
-                std_manager->PlaneGeomrtricIcp(std_manager->current_plane_cloud_,
-                                               std_manager->plane_cloud_vec_[match_frame], loop_transform);
+                std_manager->PlaneGeomrtricIcp(std_manager->current_plane_cloud_, std_manager->plane_cloud_vec_[match_frame], loop_transform);
 
                 myTf tf_W_B_est(loop_transform.second, loop_transform.first);
 
@@ -332,8 +384,7 @@ int main(int argc, char **argv)
                 Matrix3d gt_rotation = reference_gt_pose_vec[resulted_index[keyCloudInd]].second;
 
                 double t_e = (gt_translation - tf_W_B_est.pos).norm();
-                double r_e = fabs(wrapTo360(SO3Log(gt_rotation * tf_W_B_est.rot.inverse()).norm() * 180 / M_PI + 180.0)
-                                  - 180.0);
+                double r_e = fabs(wrapTo360(SO3Log(gt_rotation * tf_W_B_est.rot.inverse()).norm() * 180 / M_PI + 180.0) - 180.0);
 
                 printf(KGRN "Estimated Trans Err:  %6.3f m. Rot Err: %6.3f deg.\n" RESET, t_e, r_e);
                 
@@ -344,19 +395,13 @@ int main(int argc, char **argv)
                     flagStop = true;
             }
 
-            querying_time.push_back(tt_query_begin.Toc());
+            querying_time.push_back(tt_query.Toc());
 
             // step3. Add descriptors to the database
-            // auto t_map_update_begin =
-            // std::chrono::high_resolution_clock::now();
-            // std_manager->AddSTDescs(stds_vec);
-            // auto t_map_update_end =
-            // std::chrono::high_resolution_clock::now(); update_time.push_back(
-            //     time_inc(t_map_update_end, t_map_update_begin));
             std::cout << "[Time] descriptor extraction: "
-                      << tt_query_begin.GetLastStop()
+                      << tt_query.GetLastStop()
                       << "ms, "
-                      << "query: " << tt_query_begin.GetLastStop()
+                      << "query: " << tt_query.GetLastStop()
                       << "ms, "
                       << "update map:"
                       << " Nan "
@@ -385,12 +430,12 @@ int main(int argc, char **argv)
                 // slow_loop.sleep();
                 // if (flagStop)
                 // {
-                //     getchar();
-                //     flagStop = false;
+                    getchar();
+                    flagStop = false;
                 // }
             }
 
-            temp_cloud->clear();
+            // temp_cloud->clear();
             keyCloudInd++;
             slow_loop.sleep();
         }

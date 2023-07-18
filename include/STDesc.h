@@ -466,7 +466,7 @@ public:
      * @param save_path
      * @param frame_num
      */
-    void loadExistingSTD(const std::string &save_path, int frame_num);
+    void loadExistingSTD(const std::string &save_path);
 
 private:
     /*Following are sub-processing functions*/
