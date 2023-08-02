@@ -10,15 +10,19 @@
 		output="screen" 
 	/>
 
-  <param name="generate_lidar_path" type="string" value = "/home/samsung/NTU_carpark/ntu_night_04/inB/"/>
-  <param name="generate_pose_path" type="string" value = "/home/samsung/NTU_carpark/ntu_night_04/pose_inW.csv"/>
+  <!-- descriptor database generation -->
+  <param name="generate_descriptor_database" type="bool" value = "false"/>
+  <param name="generate_lidar_path" type="string" value = "/home/samsung/NTU_carpark/ntu_night_08/inB/"/>
+  <param name="generate_pose_path" type="string" value = "/home/samsung/NTU_carpark/ntu_night_08/pose_inW.csv"/>
+
+  <!-- relocalization -->
+  <param name="descriptor_file_path" type="string" value = "/home/samsung/NTU_carpark/ntu_night_08/saved_descriptors/"/>
   <param name="localization_lidar_path" type="string" value = "/home/samsung/NTU_carpark/result_ntu_day_02/KFCloud/"/>
   <param name="localization_pose_path" type="string" value = "/home/samsung/NTU_carpark/result_ntu_day_02/KfCloudPose.pcd"/>
-  <param name="generate_descriptor_database" type="bool" value = "false"/>
-  <param name="descriptor_file_path" type="string" value = "/home/samsung/NTU_carpark/ntu_night_04/saved_descriptors/"/>
   <param name="reference_gt_path" type="string" value = "/home/samsung/NTU_carpark/ntu_day_02/pose_inW.csv"/>
 
-
+  <!-- global map for visualizatin -->
+  <param name="global_map_path" type="string" value = "/home/samsung/NTU_carpark/Global Map/GlobalFullMap.pcd"/>
 
   <group if="$(arg rviz)">
     <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find std_detector)/rviz_cfg/demo.rviz" />

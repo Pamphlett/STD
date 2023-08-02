@@ -46,3 +46,6 @@ materials/*.pcd
 *.exe
 *.out
 *.app
+
+# clang-format
+*.clang-format
