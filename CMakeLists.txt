@@ -109,3 +109,10 @@ target_link_libraries(relocalization_ntu
         ${PCL_LIBRARIES} 
         ${OpenCV_LIBS} 
         ${CERES_LIBRARIES})
+
+add_executable(generate_database demo/generate_database.cpp src/STDesc.cpp )
+target_link_libraries(generate_database 
+        ${catkin_LIBRARIES} 
+        ${PCL_LIBRARIES} 
+        ${OpenCV_LIBS} 
+        ${CERES_LIBRARIES})
