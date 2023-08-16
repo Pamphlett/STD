@@ -165,8 +165,7 @@ int main(int argc, char **argv)
     
     // load STD descriptors in storage
     std_manager->loadExistingSTD(descriptor_path);
-    ROS_INFO("Loaded saved STD.");
-    
+    ROS_INFO(KGRN "STD database loaded." RESET);
 
     /* #region Recorded data of online localization -----------------------------------------------------------------*/
 
@@ -375,11 +374,11 @@ int main(int argc, char **argv)
                 // pubMatchedCorner.publish(pub_cloud);
                 // publish_std_pairs(loop_std_pair, pubSTD);
                 // slow_loop.sleep();
-                // if (flagStop)
-                // {
+                if (flagStop)
+                {
                     getchar();
                     flagStop = false;
-                // }
+                }
             }
 
             keyCloudInd++;

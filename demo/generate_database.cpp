@@ -51,8 +51,13 @@ int main(int argc, char **argv)
     std::string generated_pose_path = "";
     nh.param<std::string>("generated_pose_path", generated_pose_path, "");
 
+    int kf_merged = 10;
+    nh.param<int>("kf_merged", kf_merged, 10);
+
+    cout << "Merging kf: " <<  kf_merged << endl;
+
     if (generated_pose_path.find(string(".pcd")) == std::string::npos)
-        printf("Wrong pose. Please use a pcd\n");
+        printf("Wrong pose log. Please use a pcd\n");
 
     /* #endregion Generate the data base ----------------------------------------------------------------------------*/
 
@@ -80,24 +85,32 @@ int main(int argc, char **argv)
     // generate descriptor database
     printf("Generating descriptors ...");
     {
-        for (int cloudInd = 0; cloudInd < gen_total_size; ++cloudInd)
+        for (int cloudInd = 0; cloudInd < gen_total_size; cloudInd += kf_merged)
         {
-            std::string ori_time_str = std::to_string(generated_times_vec[cloudInd]);
-            std::string curr_lidar_path = generated_lidar_path + "/KfCloudinW_" + zeroPaddedString(cloudInd, gen_total_size) + ".pcd";
-
-            printf("Reading scan: %s\n", curr_lidar_path.c_str());
-
             CloudXYZIPtr kfCloud(new CloudXYZI());
-            if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *kfCloud) == -1)
+
+            for (int k = 0; k < kf_merged && cloudInd + k < gen_total_size; k++)
             {
-                ROS_ERROR("Couldn't read scan from file. \n");
-                std::cout << "Current File Name is: "
-                          << generated_index_vec[cloudInd] << std::endl;
-                return (-1);
+                std::string ori_time_str = std::to_string(generated_times_vec[cloudInd + k]);
+                std::string curr_lidar_path = generated_lidar_path + "/KfCloudinW_" + zeroPaddedString(cloudInd + k, gen_total_size) + ".pcd";
+    
+                CloudXYZIPtr kfCloud_(new CloudXYZI());
+
+                printf("Reading scan: %s\n", curr_lidar_path.c_str());
+
+                if (pcl::io::loadPCDFile<PointXYZI>(curr_lidar_path, *kfCloud_) == -1)
+                {
+                    ROS_ERROR("Couldn't read scan from file. \n");
+                    std::cout << "Current File Name is: "
+                              << generated_index_vec[cloudInd + k] << std::endl;
+                    return (-1);
+                }
+
+                *kfCloud += *kfCloud_;
             }
 
-            myTf tf_W_B(generated_poses_vec[cloudInd].second, generated_poses_vec[cloudInd].first);
-            pcl::transformPointCloud<PointXYZI>(*kfCloud, *kfCloud, tf_W_B.inverse().cast<float>().tfMat());
+            // myTf tf_W_B(generated_poses_vec[cloudInd].second, generated_poses_vec[cloudInd].first);
+            // pcl::transformPointCloud<PointXYZI>(*kfCloud, *kfCloud, tf_W_B.inverse().cast<float>().tfMat());
             down_sampling_voxel(*kfCloud, config_setting.ds_size_);
 
             if (cloudInd % config_setting.sub_frame_num_ == 0)
