@@ -40,7 +40,6 @@ int main(int argc, char **argv) {
 
     std::string reference_gt_path = "";
     std::string global_map_path = "";
-    std::string result_file_path = "";
 
     nh.param<std::string>("generate_lidar_path", generate_lidar_path, "");
     nh.param<std::string>("generate_pose_path", generate_pose_path, "");
@@ -53,9 +52,6 @@ int main(int argc, char **argv) {
 
     nh.param<std::string>("reference_gt_path", reference_gt_path, "");
     nh.param<std::string>("global_map_path", global_map_path, "");
-
-    nh.param<std::string>("result_file_path", result_file_path, "");
-    std::ofstream result_stream(result_file_path);
 
     ConfigSetting config_setting;
     read_parameters(nh, config_setting);
@@ -82,40 +78,37 @@ int main(int argc, char **argv) {
     ros::Rate slow_loop(10);
 
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> generate_poses_vec;
+    // std::vector<std::string> generate_times_vec;
     std::vector<double> generate_times_vec;
     std::vector<int> generate_index_vec;
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
             generate_key_poses_vec;
 
-    // for csv
-
-    //     load_CSV_pose_with_time(generate_pose_path, generate_index_vec,
-    //     generate_poses_vec, generate_times_vec);
-
-    // for pc
-    load_keyframes_pose_pcd(generate_pose_path, generate_index_vec,
-                            generate_poses_vec, generate_times_vec);
+    // load_CSV_pose_with_time(generate_pose_path, generate_index_vec,
+    //                         generate_poses_vec, generate_times_vec);
+    load_pose_with_time(generate_pose_path, generate_poses_vec,
+                        generate_times_vec);
 
     std::cout << "Sucessfully load pose with number: "
               << generate_poses_vec.size() << std::endl;
 
     // load global map to visualize
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapPtr(
-            new pcl::PointCloud<pcl::PointXYZRGB>);
-    if (pcl::io::loadPCDFile<pcl::PointXYZRGB>(global_map_path,
-                                               *globalMapPtr) == -1) {
-        LOG(ERROR) << "Load Global ERROR!";
-    } else {
-        LOG(INFO) << "Global Map loaded...";
-    }
+    // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapPtr(
+    //         new pcl::PointCloud<pcl::PointXYZRGB>);
+    // if (pcl::io::loadPCDFile<pcl::PointXYZRGB>(global_map_path,
+    //                                            *globalMapPtr) == -1) {
+    //     LOG(ERROR) << "Load Global ERROR!";
+    // } else {
+    //     LOG(INFO) << "Global Map loaded...";
+    // }
 
-    // voxdownsampling the global for only once
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr map_filtered(
-            new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::VoxelGrid<pcl::PointXYZRGB> map_filter;
-    map_filter.setLeafSize(0.25, 0.25, 0.25);
-    map_filter.setInputCloud(globalMapPtr);
-    map_filter.filter(*map_filtered);
+    // // voxdownsampling the global for only once
+    // pcl::PointCloud<pcl::PointXYZRGB>::Ptr map_filtered(
+    //         new pcl::PointCloud<pcl::PointXYZRGB>);
+    // pcl::VoxelGrid<pcl::PointXYZRGB> map_filter;
+    // map_filter.setLeafSize(0.25, 0.25, 0.25);
+    // map_filter.setInputCloud(globalMapPtr);
+    // map_filter.filter(*map_filtered);
 
     STDescManager *std_manager = new STDescManager(config_setting);
 
@@ -136,42 +129,29 @@ int main(int argc, char **argv) {
         // generate descriptor database
         ROS_INFO("Generating descriptors ...");
         for (int cloudInd = 0; cloudInd < gen_total_size; ++cloudInd) {
-            //     std::string ori_time_str = generate_times_vec[cloudInd];
-            //     std::replace(ori_time_str.begin(), ori_time_str.end(), '.',
-            //     '_'); std::string curr_lidar_path = generate_lidar_path +
-            //     "cloud_" +
-            //                                   std::to_string(cloudInd + 1) +
-            //                                   "_" + ori_time_str + ".pcd";
-            int curr_index = generate_index_vec[cloudInd];
-            std::stringstream curr_lidar_path;
-            curr_lidar_path << generate_lidar_path << "KfCloudinW_"
-                            << std::setfill('0') << std::setw(3) << curr_index
-                            << ".pcd";
-
+            std::stringstream lidar_data_path;
+            lidar_data_path << generate_lidar_path << std::setfill('0')
+                            << std::setw(6) << cloudInd << ".bin";
+            std::vector<float> lidar_data =
+                    read_lidar_data(lidar_data_path.str());
+            if (lidar_data.size() == 0) {
+                break;
+            }
             pcl::PointCloud<pcl::PointXYZI>::Ptr current_cloud(
                     new pcl::PointCloud<pcl::PointXYZI>());
-            pcl::PointCloud<pcl::PointXYZI>::Ptr gt_cloud(
-                    new pcl::PointCloud<pcl::PointXYZI>());
-            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_registered(
-                    new pcl::PointCloud<pcl::PointXYZI>());
-
             Eigen::Vector3d translation = generate_poses_vec[cloudInd].first;
             Eigen::Matrix3d rotation = generate_poses_vec[cloudInd].second;
-            if (pcl::io::loadPCDFile<pcl::PointXYZI>(curr_lidar_path.str(),
-                                                     *current_cloud) == -1) {
-                ROS_ERROR("Couldn't read scan from file. \n");
-                std::cout << "Current File Name is: "
-                          << generate_index_vec[cloudInd] << std::endl;
-                return (-1);
+            for (std::size_t i = 0; i < lidar_data.size(); i += 4) {
+                pcl::PointXYZI point;
+                point.x = lidar_data[i];
+                point.y = lidar_data[i + 1];
+                point.z = lidar_data[i + 2];
+                point.intensity = lidar_data[i + 3];
+                Eigen::Vector3d pv = point2vec(point);
+                pv = rotation * pv + translation;
+                point = vec2point(pv);
+                current_cloud->push_back(point);
             }
-
-            //     Eigen::Matrix4d curr_trans_matrix;
-            //     curr_trans_matrix.setIdentity();
-            //     curr_trans_matrix.topLeftCorner(3, 3) = rotation;
-            //     curr_trans_matrix.topRightCorner(3, 1) = translation;
-            //     pcl::transformPointCloud<pcl::PointXYZI>(
-            //             *current_cloud, *current_cloud, curr_trans_matrix);
-
             down_sampling_voxel(*current_cloud, config_setting.ds_size_);
             for (auto pv : current_cloud->points) {
                 temp_cloud->points.push_back(pv);
@@ -228,28 +208,9 @@ int main(int argc, char **argv) {
     std::vector<int> localization_index_vec;
     std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
             localization_key_poses_vec;
-    load_keyframes_pose_pcd(localization_pose_path, localization_index_vec,
-                            localization_poses_vec, key_frame_times_vec);
 
-    std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
-            reference_gt_pose_vec;
-    std::vector<std::string> reference_time_vec_string;
-    std::vector<double> reference_time_vec;
-    std::vector<int> reference_index_vec;
-    load_CSV_pose_with_time(reference_gt_path, reference_index_vec,
-                            reference_gt_pose_vec, reference_time_vec_string);
-
-    for (auto itr : reference_time_vec_string) {
-        double temp = std::stod(itr);
-        reference_time_vec.push_back(temp);
-    }
-
-    std::vector<int> resulted_index =
-            findCorrespondingFrames(key_frame_times_vec, reference_time_vec);
-
-    if (resulted_index.size() != key_frame_times_vec.size()) {
-        ROS_ERROR("SIZE NOT MATCH !");
-    }
+    load_pose_with_time(localization_pose_path, localization_poses_vec,
+                        key_frame_times_vec);
 
     std::cout << "Sucessfully load data to be relocalized: "
               << localization_poses_vec.size() << std::endl;
@@ -257,42 +218,36 @@ int main(int argc, char **argv) {
     size_t loc_total_size = localization_poses_vec.size();
 
     ///////////// start retrieval /////////////////
+    int success_count = 0;
     while (ros::ok()) {
         if (cloudInd >= loc_total_size) {
             break;
         }
 
-        int curr_index = localization_index_vec[cloudInd];
-        std::stringstream curr_lidar_path;
-        curr_lidar_path << localization_lidar_path << "KfCloudinW_"
-                        << std::setfill('0') << std::setw(3) << curr_index
-                        << ".pcd";
-
+        std::stringstream lidar_data_path;
+        lidar_data_path << localization_lidar_path << std::setfill('0')
+                        << std::setw(6) << cloudInd << ".bin";
+        std::vector<float> lidar_data = read_lidar_data(lidar_data_path.str());
+        if (lidar_data.size() == 0) {
+            break;
+        }
         pcl::PointCloud<pcl::PointXYZI>::Ptr current_cloud(
-                new pcl::PointCloud<pcl::PointXYZI>());
-        pcl::PointCloud<pcl::PointXYZI>::Ptr gt_cloud(
                 new pcl::PointCloud<pcl::PointXYZI>());
         pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_registered(
                 new pcl::PointCloud<pcl::PointXYZI>());
-
         Eigen::Vector3d translation = localization_poses_vec[cloudInd].first;
         Eigen::Matrix3d rotation = localization_poses_vec[cloudInd].second;
-        if (pcl::io::loadPCDFile<pcl::PointXYZI>(curr_lidar_path.str(),
-                                                 *current_cloud) == -1) {
-            ROS_ERROR("Couldn't read scan from file. \n");
-            std::cout << "Current File Name is: "
-                      << localization_index_vec[cloudInd] << std::endl;
-            return (-1);
+        for (std::size_t i = 0; i < lidar_data.size(); i += 4) {
+            pcl::PointXYZI point;
+            point.x = lidar_data[i];
+            point.y = lidar_data[i + 1];
+            point.z = lidar_data[i + 2];
+            point.intensity = lidar_data[i + 3];
+            // Eigen::Vector3d pv = point2vec(point);
+            // pv = rotation * pv + translation;
+            // point = vec2point(pv);
+            current_cloud->push_back(point);
         }
-
-        Eigen::Matrix4d curr_trans_matrix;
-        curr_trans_matrix.setIdentity();
-        curr_trans_matrix.topLeftCorner(3, 3) = rotation;
-        curr_trans_matrix.topRightCorner(3, 1) = translation;
-        pcl::transformPointCloud<pcl::PointXYZI>(
-                *current_cloud, *current_cloud,
-                curr_trans_matrix.cast<float>().inverse());
-
         down_sampling_voxel(*current_cloud, config_setting.ds_size_);
         for (auto pv : current_cloud->points) {
             temp_cloud->points.push_back(pv);
@@ -347,11 +302,9 @@ int main(int argc, char **argv) {
                 estimated_pose_inW = estimated_transform;
 
                 Eigen::Vector3d gt_translation =
-                        reference_gt_pose_vec[resulted_index[keyCloudInd]]
-                                .first;
+                        localization_poses_vec[cloudInd].first;
                 Eigen::Matrix3d gt_rotation =
-                        reference_gt_pose_vec[resulted_index[keyCloudInd]]
-                                .second;
+                        localization_poses_vec[cloudInd].second;
 
                 double t_e = (gt_translation -
                               estimated_pose_inW.topRightCorner(3, 1))
@@ -370,11 +323,15 @@ int main(int argc, char **argv) {
                           << std::endl;
                 std::cout << "Estimated Rotation Error is:     " << r_e
                           << " degree;" << std::endl;
-                t_error_vec.push_back(t_e);
-                r_error_vec.push_back(r_e);
-                if (r_e > 100.0) {
-                    flagStop = true;
+
+                if (t_e < 3.0 && r_e < 10.0) {
+                    success_count++;
+                    t_error_vec.push_back(t_e);
+                    r_error_vec.push_back(r_e);
                 }
+                // if (r_e > 100.0) {
+                //     flagStop = true;
+                // }
             }
             auto t_query_end = std::chrono::high_resolution_clock::now();
             querying_time.push_back(time_inc(t_query_end, t_query_begin));
@@ -386,72 +343,72 @@ int main(int argc, char **argv) {
             // auto t_map_update_end =
             // std::chrono::high_resolution_clock::now(); update_time.push_back(
             //     time_inc(t_map_update_end, t_map_update_begin));
-            std::cout << "[Time] descriptor extraction: "
-                      << time_inc(t_descriptor_end, t_descriptor_begin)
-                      << "ms, "
-                      << "query: " << time_inc(t_query_end, t_query_begin)
-                      << "ms, "
-                      << "update map:"
-                      << " Nan "
-                      << "ms" << std::endl;
-            std::cout << std::endl;
+            // std::cout << "[Time] descriptor extraction: "
+            //           << time_inc(t_descriptor_end, t_descriptor_begin)
+            //           << "ms, "
+            //           << "query: " << time_inc(t_query_end, t_query_begin)
+            //           << "ms, "
+            //           << "update map:"
+            //           << " Nan "
+            //           << "ms" << std::endl;
+            // std::cout << std::endl;
 
             // publish
-            sensor_msgs::PointCloud2 pub_cloud;
-            pcl::toROSMsg(*temp_cloud, pub_cloud);
-            pub_cloud.header.frame_id = "camera_init";
-            pubCureentCloud.publish(pub_cloud);
-            pcl::toROSMsg(*std_manager->corner_cloud_vec_.back(), pub_cloud);
-            pub_cloud.header.frame_id = "camera_init";
-            pubCurrentCorner.publish(pub_cloud);
+            // sensor_msgs::PointCloud2 pub_cloud;
+            // pcl::toROSMsg(*temp_cloud, pub_cloud);
+            // pub_cloud.header.frame_id = "camera_init";
+            // pubCureentCloud.publish(pub_cloud);
+            // pcl::toROSMsg(*std_manager->corner_cloud_vec_.back(), pub_cloud);
+            // pub_cloud.header.frame_id = "camera_init";
+            // pubCurrentCorner.publish(pub_cloud);
 
-            // publish map for visualization
-            sensor_msgs::PointCloud2 cloud_ROS;
-            pcl::toROSMsg(*map_filtered, cloud_ROS);
-            cloud_ROS.header.frame_id = "camera_init";
-            pubMapCloud.publish(cloud_ROS);
+            // // publish map for visualization
+            // // sensor_msgs::PointCloud2 cloud_ROS;
+            // // pcl::toROSMsg(*map_filtered, cloud_ROS);
+            // // cloud_ROS.header.frame_id = "camera_init";
+            // // pubMapCloud.publish(cloud_ROS);
 
-            if (search_result.first >= 0) {
-                triggle_loop_num++;
-                pcl::toROSMsg(
-                        *std_manager->plane_cloud_vec_[search_result.first],
-                        pub_cloud);
-                pub_cloud.header.frame_id = "camera_init";
-                pubMatchedCloud.publish(pub_cloud);
-                slow_loop.sleep();
+            // if (search_result.first >= 0) {
+            //     triggle_loop_num++;
+            //     pcl::toROSMsg(
+            //             *std_manager->plane_cloud_vec_[search_result.first],
+            //             pub_cloud);
+            //     pub_cloud.header.frame_id = "camera_init";
+            //     pubMatchedCloud.publish(pub_cloud);
+            //     slow_loop.sleep();
 
-                pcl::toROSMsg(*cloud_registered, pub_cloud);
-                pub_cloud.header.frame_id = "camera_init";
-                pubRegisterCloud.publish(pub_cloud);
-                slow_loop.sleep();
+            //     pcl::toROSMsg(*cloud_registered, pub_cloud);
+            //     pub_cloud.header.frame_id = "camera_init";
+            //     pubRegisterCloud.publish(pub_cloud);
+            //     slow_loop.sleep();
 
-                // pcl::toROSMsg(
-                //     *std_manager->corner_cloud_vec_[search_result.first],
-                //     pub_cloud);
-                // pub_cloud.header.frame_id = "camera_init";
-                // pubMatchedCorner.publish(pub_cloud);
-                // publish_std_pairs(loop_std_pair, pubSTD);
-                // slow_loop.sleep();
-                if (flagStop) {
-                    getchar();
-                    flagStop = false;
-                }
-            }
+            //     // pcl::toROSMsg(
+            //     //     *std_manager->corner_cloud_vec_[search_result.first],
+            //     //     pub_cloud);
+            //     // pub_cloud.header.frame_id = "camera_init";
+            //     // pubMatchedCorner.publish(pub_cloud);
+            //     // publish_std_pairs(loop_std_pair, pubSTD);
+            //     // slow_loop.sleep();
+            //     if (flagStop) {
+            //         getchar();
+            //         flagStop = false;
+            //     }
+            // }
             temp_cloud->clear();
             keyCloudInd++;
             slow_loop.sleep();
         }
-        nav_msgs::Odometry odom;
-        odom.header.frame_id = "camera_init";
-        odom.pose.pose.position.x = translation[0];
-        odom.pose.pose.position.y = translation[1];
-        odom.pose.pose.position.z = translation[2];
-        Eigen::Quaterniond q(rotation);
-        odom.pose.pose.orientation.w = q.w();
-        odom.pose.pose.orientation.x = q.x();
-        odom.pose.pose.orientation.y = q.y();
-        odom.pose.pose.orientation.z = q.z();
-        pubOdomAftMapped.publish(odom);
+        // nav_msgs::Odometry odom;
+        // odom.header.frame_id = "camera_init";
+        // odom.pose.pose.position.x = translation[0];
+        // odom.pose.pose.position.y = translation[1];
+        // odom.pose.pose.position.z = translation[2];
+        // Eigen::Quaterniond q(rotation);
+        // odom.pose.pose.orientation.w = q.w();
+        // odom.pose.pose.orientation.x = q.x();
+        // odom.pose.pose.orientation.y = q.y();
+        // odom.pose.pose.orientation.z = q.z();
+        // pubOdomAftMapped.publish(odom);
         loop.sleep();
         cloudInd++;
     }
@@ -470,8 +427,10 @@ int main(int argc, char **argv) {
     double mean_rotation_error =
             std::accumulate(r_error_vec.begin(), r_error_vec.end(), 0) * 1.0 /
             t_error_vec.size();
-    std::cout << "Total key frame number:" << keyCloudInd
-              << ", loop number:" << triggle_loop_num << std::endl;
+    std::cout << "Total key frame number: " << keyCloudInd
+              << ", relocalized number: " << success_count
+              << " w/ succuss ratio "
+              << (double)success_count / keyCloudInd * 100 << "%." << std::endl;
     std::cout << "Mean time for descriptor extraction: " << mean_descriptor_time
               << "ms, query: " << mean_query_time
               << "ms, update: " << mean_update_time << "ms, total: "

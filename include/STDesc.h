@@ -1,22 +1,24 @@
 #pragma once
 
-#include "omp.h"
-#include <Eigen/Core>
-#include <Eigen/Dense>
-#include <Eigen/StdVector>
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
-#include <fstream>
-#include <mutex>
 #include <pcl/common/io.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <ros/ros.h>
-#include <sstream>
 #include <stdio.h>
-#include <string>
-#include <unordered_map>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+
+#include <Eigen/Core>
+#include <Eigen/Dense>
+#include <Eigen/StdVector>
+#include <fstream>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+
+#include "omp.h"
 
 // adding for slict structure
 #include <pcl/point_cloud.h>
@@ -27,8 +29,7 @@
 #define MAX_N 10000000000
 #define MAX_FRAME_N 20000
 
-typedef struct ConfigSetting
-{
+typedef struct ConfigSetting {
     /* for point cloud pre-preocess*/
     int stop_skip_enable_ = 0;
     double ds_size_ = 0.5;
@@ -65,8 +66,7 @@ typedef struct ConfigSetting
 } ConfigSetting;
 
 // Structure for Stabel Triangle Descriptor
-typedef struct STDesc
-{
+typedef struct STDesc {
     // the side lengths of STDesc, arranged from short to long
     Eigen::Vector3d side_length_;
 
@@ -86,8 +86,7 @@ typedef struct STDesc
 } STDesc;
 
 // plane structure for corner point extraction
-typedef struct Plane
-{
+typedef struct Plane {
     pcl::PointXYZINormal p_center_;
     Eigen::Vector3d center_;
     Eigen::Vector3d normal_;
@@ -101,32 +100,26 @@ typedef struct Plane
     bool is_plane_ = false;
 } Plane;
 
-typedef struct STDMatchList
-{
+typedef struct STDMatchList {
     std::vector<std::pair<STDesc, STDesc>> match_list_;
     std::pair<int, int> match_id_;
     double mean_dis_;
 } STDMatchList;
 
-class VOXEL_LOC
-{
+class VOXEL_LOC {
 public:
     int64_t x, y, z;
 
     VOXEL_LOC(int64_t vx = 0, int64_t vy = 0, int64_t vz = 0)
-        : x(vx), y(vy), z(vz)
-    {
-    }
+        : x(vx), y(vy), z(vz) {}
 
-    bool operator==(const VOXEL_LOC &other) const
-    {
+    bool operator==(const VOXEL_LOC &other) const {
         return (x == other.x && y == other.y && z == other.z);
     }
 };
 
 // for down sample function
-struct M_POINT
-{
+struct M_POINT {
     float xyz[3];
     float intensity;
     int count = 0;
@@ -135,10 +128,8 @@ struct M_POINT
 // Hash value
 
 template <>
-struct std::hash<VOXEL_LOC>
-{
-    int64_t operator()(const VOXEL_LOC &s) const
-    {
+struct std::hash<VOXEL_LOC> {
+    int64_t operator()(const VOXEL_LOC &s) const {
         using std::hash;
         using std::size_t;
         return ((((s.z) * HASH_P) % MAX_N + (s.y)) * HASH_P) % MAX_N + (s.x);
@@ -147,41 +138,41 @@ struct std::hash<VOXEL_LOC>
 
 /////////////////// begin slict defined types////////////////////
 
-struct PointTQXYZI
-{
+struct PointTQXYZI {
     PCL_ADD_POINT4D
-    PCL_ADD_INTENSITY; // preferred way of adding a XYZ+padding
+    PCL_ADD_INTENSITY;  // preferred way of adding a XYZ+padding
     double t;
     float qx;
     float qy;
     float qz;
     float qw;
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW // make sure our new allocators are aligned
-} EIGEN_ALIGN16; // enforce SSE padding for correct memory alignment
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW  // make sure our new allocators are aligned
+} EIGEN_ALIGN16;  // enforce SSE padding for correct memory alignment
 POINT_CLOUD_REGISTER_POINT_STRUCT(
-    PointTQXYZI,
-    (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
-        double, t, t)(float, qx, qx)(float, qy, qy)(float, qz, qz)(float, qw,
-                                                                   qw))
+        PointTQXYZI,
+        (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
+                double, t, t)(float, qx, qx)(float, qy, qy)(float,
+                                                            qz,
+                                                            qz)(float, qw, qw))
 typedef PointTQXYZI PointPose;
 typedef pcl::PointCloud<PointPose> CloudPose;
 typedef pcl::PointCloud<PointPose>::Ptr CloudPosePtr;
 
 /////////////////// end slict defined types////////////////////
 
-class STDesc_LOC
-{
+class STDesc_LOC {
 public:
     int64_t x, y, z, a, b, c;
 
-    STDesc_LOC(int64_t vx = 0, int64_t vy = 0, int64_t vz = 0, int64_t va = 0,
-               int64_t vb = 0, int64_t vc = 0)
-        : x(vx), y(vy), z(vz), a(va), b(vb), c(vc)
-    {
-    }
+    STDesc_LOC(int64_t vx = 0,
+               int64_t vy = 0,
+               int64_t vz = 0,
+               int64_t va = 0,
+               int64_t vb = 0,
+               int64_t vc = 0)
+        : x(vx), y(vy), z(vz), a(va), b(vb), c(vc) {}
 
-    bool operator==(const STDesc_LOC &other) const
-    {
+    bool operator==(const STDesc_LOC &other) const {
         // use three attributes
         return (x == other.x && y == other.y && z == other.z);
         // use six attributes
@@ -192,10 +183,8 @@ public:
 };
 
 template <>
-struct std::hash<STDesc_LOC>
-{
-    int64_t operator()(const STDesc_LOC &s) const
-    {
+struct std::hash<STDesc_LOC> {
+    int64_t operator()(const STDesc_LOC &s) const {
         using std::hash;
         using std::size_t;
         return ((((s.z) * HASH_P) % MAX_N + (s.y)) * HASH_P) % MAX_N + (s.x);
@@ -214,14 +203,13 @@ struct std::hash<STDesc_LOC>
 };
 
 // OctoTree structure for plane detection
-class OctoTree
-{
+class OctoTree {
 public:
     ConfigSetting config_setting_;
     std::vector<Eigen::Vector3d> voxel_points_;
     Plane *plane_ptr_;
     int layer_;
-    int octo_state_; // 0 is end of tree, 1 is not
+    int octo_state_;  // 0 is end of tree, 1 is not
     int merge_num_ = 0;
     bool is_project_ = false;
     std::vector<Eigen::Vector3d> proj_normal_vec_;
@@ -233,22 +221,19 @@ public:
 
     bool is_publish_ = false;
     OctoTree *leaves_[8];
-    double voxel_center_[3]; // x, y, z
+    double voxel_center_[3];  // x, y, z
     float quater_length_;
     bool init_octo_;
     OctoTree(const ConfigSetting &config_setting)
-        : config_setting_(config_setting)
-    {
+        : config_setting_(config_setting) {
         voxel_points_.clear();
         octo_state_ = 0;
         layer_ = 0;
         init_octo_ = false;
-        for (int i = 0; i < 8; i++)
-        {
+        for (int i = 0; i < 8; i++) {
             leaves_[i] = nullptr;
         }
-        for (int i = 0; i < 6; i++)
-        {
+        for (int i = 0; i < 6; i++) {
             is_check_connect_[i] = false;
             connect_[i] = false;
             connect_tree_[i] = nullptr;
@@ -263,9 +248,9 @@ void down_sampling_voxel(pcl::PointCloud<pcl::PointXYZI> &pl_feat,
                          double voxel_size);
 
 void load_pose_with_time(
-    const std::string &pose_file,
-    std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
-    std::vector<double> &times_vec);
+        const std::string &pose_file,
+        std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
+        std::vector<double> &times_vec);
 
 /**
  * @brief load key frame poses and time stamps from a pcd file
@@ -275,9 +260,10 @@ void load_pose_with_time(
  * @param times_vec
  */
 void load_keyframes_pose_pcd(
-    const std::string &pose_file, std::vector<int> &index_vec,
-    std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
-    std::vector<double> &times_vec);
+        const std::string &pose_file,
+        std::vector<int> &index_vec,
+        std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
+        std::vector<double> &times_vec);
 
 /**
  * @brief find the nerest neighbor frame in reference_time_vec for every frame
@@ -288,8 +274,8 @@ void load_keyframes_pose_pcd(
  * @return std::vector<int> the resulted index vector
  */
 std::vector<int> findCorrespondingFrames(
-    const std::vector<double> &key_frame_times_vec,
-    const std::vector<double> &reference_time_vec);
+        const std::vector<double> &key_frame_times_vec,
+        const std::vector<double> &reference_time_vec);
 
 /**
  * @brief load pose from a .csv file
@@ -300,9 +286,10 @@ std::vector<int> findCorrespondingFrames(
  * @param times_vec corresponding time
  */
 void load_CSV_pose_with_time(
-    const std::string &file_path, std::vector<int> &index_vec,
-    std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
-    std::vector<std::string> &times_vec);
+        const std::string &file_path,
+        std::vector<int> &index_vec,
+        std::vector<std::pair<Eigen::Vector3d, Eigen::Matrix3d>> &poses_vec,
+        std::vector<std::string> &times_vec);
 
 /**
  * @brief Read pose from a file (with 1*12 format)
@@ -331,7 +318,8 @@ bool batch_read_filenames_in_folder(const std::string &folderName,
                                     const std::string &file_list_extenstion,
                                     const std::string &extension,
                                     std::vector<std::string> &fileNames,
-                                    int frame_begin = 0, int frame_end = 99999,
+                                    int frame_begin = 0,
+                                    int frame_end = 99999,
                                     int frame_step = 1);
 
 void read_parameters(ros::NodeHandle &nh, ConfigSetting &config_setting);
@@ -343,22 +331,22 @@ pcl::PointXYZI vec2point(const Eigen::Vector3d &vec);
 Eigen::Vector3d point2vec(const pcl::PointXYZI &pi);
 
 void publish_std_pairs(
-    const std::vector<std::pair<STDesc, STDesc>> &match_std_pairs,
-    const ros::Publisher &std_publisher);
+        const std::vector<std::pair<STDesc, STDesc>> &match_std_pairs,
+        const ros::Publisher &std_publisher);
 
 bool attach_greater_sort(std::pair<double, int> a, std::pair<double, int> b);
 
-struct PlaneSolver
-{
-    PlaneSolver(Eigen::Vector3d curr_point_, Eigen::Vector3d curr_normal_,
-                Eigen::Vector3d target_point_, Eigen::Vector3d target_normal_)
+struct PlaneSolver {
+    PlaneSolver(Eigen::Vector3d curr_point_,
+                Eigen::Vector3d curr_normal_,
+                Eigen::Vector3d target_point_,
+                Eigen::Vector3d target_normal_)
         : curr_point(curr_point_),
           curr_normal(curr_normal_),
           target_point(target_point_),
           target_normal(target_normal_){};
     template <typename T>
-    bool operator()(const T *q, const T *t, T *residual) const
-    {
+    bool operator()(const T *q, const T *t, T *residual) const {
         Eigen::Quaternion<T> q_w_curr{q[3], q[0], q[1], q[2]};
         Eigen::Matrix<T, 3, 1> t_w_curr{t[0], t[1], t[2]};
         Eigen::Matrix<T, 3, 1> cp{T(curr_point.x()), T(curr_point.y()),
@@ -366,7 +354,7 @@ struct PlaneSolver
         Eigen::Matrix<T, 3, 1> point_w;
         point_w = q_w_curr * cp + t_w_curr;
         Eigen::Matrix<T, 3, 1> point_target(
-            T(target_point.x()), T(target_point.y()), T(target_point.z()));
+                T(target_point.x()), T(target_point.y()), T(target_point.z()));
         Eigen::Matrix<T, 3, 1> norm(T(target_normal.x()), T(target_normal.y()),
                                     T(target_normal.z()));
         residual[0] = norm.dot(point_w - point_target);
@@ -376,11 +364,10 @@ struct PlaneSolver
     static ceres::CostFunction *Create(const Eigen::Vector3d curr_point_,
                                        const Eigen::Vector3d curr_normal_,
                                        Eigen::Vector3d target_point_,
-                                       Eigen::Vector3d target_normal_)
-    {
+                                       Eigen::Vector3d target_normal_) {
         return (new ceres::AutoDiffCostFunction<PlaneSolver, 1, 4, 3>(
-            new PlaneSolver(curr_point_, curr_normal_, target_point_,
-                            target_normal_)));
+                new PlaneSolver(curr_point_, curr_normal_, target_point_,
+                                target_normal_)));
     }
 
     Eigen::Vector3d curr_point;
@@ -389,8 +376,7 @@ struct PlaneSolver
     Eigen::Vector3d target_normal;
 };
 
-class STDescManager
-{
+class STDescManager {
 public:
     STDescManager() = default;
 
@@ -399,8 +385,7 @@ public:
     unsigned int current_frame_id_;
 
     STDescManager(ConfigSetting &config_setting)
-        : config_setting_(config_setting)
-    {
+        : config_setting_(config_setting) {
         current_frame_id_ = 0;
 
         current_plane_cloud_.reset(new pcl::PointCloud<pcl::PointXYZINormal>);
@@ -435,8 +420,8 @@ public:
      * @param stds_vec
      */
     void GenerateSTDescsOneTime(
-        pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
-        std::vector<STDesc> &stds_vec);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
+            std::vector<STDesc> &stds_vec);
 
     // search result <candidate_id, plane icp score>. -1 for no loop
     void SearchLoop(const std::vector<STDesc> &stds_vec,
@@ -449,9 +434,9 @@ public:
 
     // Geometrical optimization by plane-to-plane ico
     void PlaneGeomrtricIcp(
-        const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &source_cloud,
-        const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
-        std::pair<Eigen::Vector3d, Eigen::Matrix3d> &transform);
+            const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &source_cloud,
+            const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
+            std::pair<Eigen::Vector3d, Eigen::Matrix3d> &transform);
 
     /**
      * @brief save descriptor and corresponding clouds to local data base
@@ -484,23 +469,24 @@ private:
 
     // extract corner points from pre-build voxel map and clouds
     void corner_extractor(
-        std::unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
-        const pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
-        pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points);
+            std::unordered_map<VOXEL_LOC, OctoTree *> &voxel_map,
+            const pcl::PointCloud<pcl::PointXYZI>::Ptr &input_cloud,
+            pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points);
 
     void extract_corner(
-        const Eigen::Vector3d &proj_center, const Eigen::Vector3d proj_normal,
-        const std::vector<Eigen::Vector3d> proj_points,
-        pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points);
+            const Eigen::Vector3d &proj_center,
+            const Eigen::Vector3d proj_normal,
+            const std::vector<Eigen::Vector3d> proj_points,
+            pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points);
 
     // non maximum suppression, to control the number of corners
     void non_maxi_suppression(
-        pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points);
+            pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points);
 
     // build STDescs from corner points.
     void build_stdesc(
-        const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points,
-        std::vector<STDesc> &stds_vec);
+            const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &corner_points,
+            std::vector<STDesc> &stds_vec);
 
     // Select a specified number of candidate frames according to the number of
     // STDesc rough matches
@@ -509,17 +495,19 @@ private:
 
     // Get the best candidate frame by geometry check
     void candidate_verify(
-        const STDMatchList &candidate_matcher, double &verify_score,
-        std::pair<Eigen::Vector3d, Eigen::Matrix3d> &relative_pose,
-        std::vector<std::pair<STDesc, STDesc>> &sucess_match_vec);
+            const STDMatchList &candidate_matcher,
+            double &verify_score,
+            std::pair<Eigen::Vector3d, Eigen::Matrix3d> &relative_pose,
+            std::vector<std::pair<STDesc, STDesc>> &sucess_match_vec);
 
     // Get the transform between a matched std pair
     void triangle_solver(std::pair<STDesc, STDesc> &std_pair,
-                         Eigen::Vector3d &t, Eigen::Matrix3d &rot);
+                         Eigen::Vector3d &t,
+                         Eigen::Matrix3d &rot);
 
     // Geometrical verification by plane-to-plane icp threshold
     double plane_geometric_verify(
-        const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &source_cloud,
-        const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
-        const std::pair<Eigen::Vector3d, Eigen::Matrix3d> &transform);
+            const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &source_cloud,
+            const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
+            const std::pair<Eigen::Vector3d, Eigen::Matrix3d> &transform);
 };

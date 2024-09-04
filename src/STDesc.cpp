@@ -1,4 +1,7 @@
 #include "include/STDesc.h"
+
+#include <filesystem>
+
 void down_sampling_voxel(pcl::PointCloud<pcl::PointXYZI> &pl_feat,
                          double voxel_size) {
     int intensity = rand() % 255;
@@ -1582,6 +1585,13 @@ double STDescManager::plane_geometric_verify(
         const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &source_cloud,
         const pcl::PointCloud<pcl::PointXYZINormal>::Ptr &target_cloud,
         const std::pair<Eigen::Vector3d, Eigen::Matrix3d> &transform) {
+    std::cout << source_cloud->points.size() << "    "
+              << target_cloud->points.size() << std::endl;
+    if ((source_cloud->points.size() == 0) ||
+        (target_cloud->points.size() == 0) || source_cloud == nullptr ||
+        target_cloud == nullptr) {
+        return -1;
+    }
     Eigen::Vector3d t = transform.first;
     Eigen::Matrix3d rot = transform.second;
     pcl::KdTreeFLANN<pcl::PointXYZ>::Ptr kd_tree(
@@ -1735,6 +1745,9 @@ void STDescManager::saveToFile(const std::string &save_path) {
     // std::ofstream outputFile(desOutPath, std::ios::binary);
     // outputFile.write(binaryData.data(), binaryData.size());
     // outputFile.close();
+
+    // filesystem::create_directories(save_path);
+    // filesystem::create_directories(save_path + "/plane_clouds");
 
     std::string desOutPath = save_path + "des.bin";
     // 打开文件进行保存

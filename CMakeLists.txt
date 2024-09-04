@@ -1,10 +1,11 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.10)
 project(std_detector)
 
-## Compile as C++14
+# # Compile as C++14
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD 14)
+
 
 # set(CMAKE_BUILD_TYPE "Debug")
 if (NOT CMAKE_BUILD_TYPE)
@@ -66,11 +67,12 @@ include_directories(
 )
 
 add_executable(place_recognition_kitti demo/place_recognition_kitti.cpp src/STDesc.cpp )
-target_link_libraries(place_recognition_kitti 
-        ${catkin_LIBRARIES} 
-        ${PCL_LIBRARIES} 
-        ${OpenCV_LIBS} 
-        ${CERES_LIBRARIES})
+target_link_libraries(place_recognition_kitti
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  ${CERES_LIBRARIES}
+  stdc++fs)
 
 # add_executable(place_recognition_livox demo/place_recognition_livox.cpp src/STDesc.cpp )
 # target_link_libraries(place_recognition_livox 
@@ -96,16 +98,34 @@ target_link_libraries(place_recognition_kitti
 #         gtsam)
 
 add_executable(place_recognition_ntu demo/place_recognition_ntu.cpp src/STDesc.cpp )
-target_link_libraries(place_recognition_ntu 
-        ${catkin_LIBRARIES} 
-        ${PCL_LIBRARIES} 
-        ${OpenCV_LIBS} 
-        ${CERES_LIBRARIES})
+target_link_libraries(place_recognition_ntu
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  ${CERES_LIBRARIES}
+  stdc++fs)
 
 
 add_executable(relocalization_ntu demo/relocalization_std.cpp src/STDesc.cpp )
-target_link_libraries(relocalization_ntu 
-        ${catkin_LIBRARIES} 
-        ${PCL_LIBRARIES} 
-        ${OpenCV_LIBS} 
-        ${CERES_LIBRARIES})
+target_link_libraries(relocalization_ntu
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  ${CERES_LIBRARIES}
+  stdc++fs)
+
+add_executable(relocalization_kitti demo/relocalization_kitti.cpp src/STDesc.cpp)
+target_link_libraries(relocalization_kitti
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  ${CERES_LIBRARIES}
+  stdc++fs)
+
+add_executable(relocalization_mulran demo/relocalization_mulran.cpp src/STDesc.cpp)
+target_link_libraries(relocalization_mulran
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  ${CERES_LIBRARIES}
+  stdc++fs)
