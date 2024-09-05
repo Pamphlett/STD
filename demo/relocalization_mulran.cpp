@@ -129,11 +129,14 @@ int main(int argc, char **argv) {
     std::ofstream result_stream(result_file_path);
 
     std::vector<std::string> genScanFiles;
-    batch_read_filenames_in_folder(generate_lidar_path, "_filelist.txt", ".bin",
-                                   genScanFiles);
+    // batch_read_filenames_in_folder(generate_lidar_path, "_filelist.txt", ".bin",
+    //                                genScanFiles);
+    genScanFiles = getFilesInDirectory(generate_lidar_path);
     std::vector<std::string> locScanFiles;
-    batch_read_filenames_in_folder(localization_lidar_path, "_filelist.txt",
-                                   ".bin", locScanFiles);
+    // batch_read_filenames_in_folder(localization_lidar_path, "_filelist.txt",
+    //                                ".bin", locScanFiles);
+    locScanFiles = getFilesInDirectory(localization_lidar_path);
+    
 
     ConfigSetting config_setting;
     read_parameters(nh, config_setting);

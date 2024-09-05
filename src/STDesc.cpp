@@ -318,6 +318,25 @@ bool batch_read_filenames_in_folder(const std::string &folderName,
     return 1;
 }
 
+std::vector<std::string> getFilesInDirectory(const std::string &directoryPath) {
+    std::vector<std::string> fileNames;
+
+    if (!fs::exists(directoryPath) || !fs::is_directory(directoryPath)) {
+        std::cerr << "Directory does not exist or is not a directory: "
+                  << directoryPath << std::endl;
+        return fileNames;
+    }
+
+    for (const auto &entry : fs::directory_iterator(directoryPath)) {
+        if (fs::is_regular_file(entry.status())) {
+            fileNames.push_back(entry.path().string());
+        }
+    }
+
+    std::sort(fileNames.begin(), fileNames.end());
+    return fileNames;
+}
+
 double time_inc(std::chrono::_V2::system_clock::time_point &t_end,
                 std::chrono::_V2::system_clock::time_point &t_begin) {
     return std::chrono::duration_cast<std::chrono::duration<double>>(t_end -
@@ -1540,15 +1559,15 @@ void STDescManager::candidate_verify(
                 sucess_match_vec.push_back(verify_pair);
             }
         }
-        verify_score = plane_geometric_verify(
-            plane_cloud_vec_.back(),
-            plane_cloud_vec_[candidate_matcher.match_id_.second],
-            relative_pose);
-
         // verify_score = plane_geometric_verify(
-        //         current_plane_cloud_,
-        //         plane_cloud_vec_[candidate_matcher.match_id_.second],
-        //         relative_pose);
+        //     plane_cloud_vec_.back(),
+        //     plane_cloud_vec_[candidate_matcher.match_id_.second],
+        //     relative_pose);
+
+        verify_score = plane_geometric_verify(
+                current_plane_cloud_,
+                plane_cloud_vec_[candidate_matcher.match_id_.second],
+                relative_pose);
     } else {
         verify_score = -1;
     }
@@ -1777,6 +1796,21 @@ void STDescManager::saveToFile(const std::string &save_path) {
     outputFile.close();
 
     std::string plane_cloud_path = save_path + "plane_clouds/";
+
+    // Check if the directory exists, and create it if it doesn't
+    std::filesystem::path dir(plane_cloud_path);
+    if (!std::filesystem::exists(dir)) {
+        // Create the directory
+        if (std::filesystem::create_directories(dir)) {
+            std::cout << "Directory created successfully: " << plane_cloud_path << std::endl;
+        } else {
+            std::cerr << "Error creating directory: " << plane_cloud_path << std::endl;
+        }
+    } else {
+        std::cout << "Directory already exists: " << plane_cloud_path << std::endl;
+    }
+
+
     std::stringstream ss;
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr currPlaneCloud(
             new pcl::PointCloud<pcl::PointXYZINormal>());

@@ -16,22 +16,22 @@
 
   <!-- descriptor database generation -->
   <param name="generate_descriptor_database" type="bool" value = "false"/>
-  <param name="generate_lidar_path" type="string" value = "/data_ssd/MulRan/DCC02/Ouster"/>
-  <param name="generate_pose_path" type="string" value = "/data_ssd/MulRan/DCC02/global_pose_aligned_trimmed.txt"/>
-  <param name="descriptor_file_path" type="string" value = "/data_ssd/NTU_MCD/ntu_day_01/saved_descriptors/"/>
+  <param name="generate_lidar_path" type="string" value = "/data_ssd/NTU_MCD/ntu_night_08/bin"/>
+  <param name="generate_pose_path" type="string" value = "/data_ssd/NTU_MCD/ntu_night_08/pose.txt"/>
+  <param name="descriptor_file_path" type="string" value = "/data_ssd/NTU_MCD/ntu_night_08/saved_descriptors/"/>
 
   <!-- relocalization -->
-  <param name="localization_lidar_path" type="string" value = "/data_ssd/NTU_MCD/ntu_day_02/bin"/>
-  <param name="localization_pose_path" type="string" value = "/data_ssd/NTU_MCD/ntu_day_02/pose.txt"/>
+  <param name="localization_lidar_path" type="string" value = "/data_ssd/NTU_MCD/ntu_day_01/bin"/>
+  <param name="localization_pose_path" type="string" value = "/data_ssd/NTU_MCD/ntu_day_01/pose.txt"/>
   <!-- <param name="reference_gt_path" type="string" value = "/home/samsung/NTU_carpark/ntu_day_02/pose_inW.csv"/> -->
 
   <!-- global map for visualizatin -->
   <param name="global_map_path" type="string" value = "/data_ssd/NTU_MCD/global_map/GlobalFullMapSpar.pcd"/>
-  <param name="result_file_path" type="string" value = "/home/pam/Documents/results_2023/semantic_gloc/mulran_dcc/STD/02/temp_res.txt"/>
+  <param name="result_file_path" type="string" value = "/home/pam/Documents/results_2024/outram++/MCD/NTU/std/01.txt"/>
 
 
-  <group if="$(arg rviz)">
+  <!-- <group if="$(arg rviz)">
     <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find std_detector)/rviz_cfg/demo.rviz" />
-  </group>
+  </group> -->
 
 </launch>

@@ -13,6 +13,7 @@
 #include <Eigen/Dense>
 #include <Eigen/StdVector>
 #include <fstream>
+#include <filesystem>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -24,6 +25,9 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
+
+using namespace std;
+namespace fs = std::filesystem;
 
 #define HASH_P 116101
 #define MAX_N 10000000000
@@ -321,6 +325,8 @@ bool batch_read_filenames_in_folder(const std::string &folderName,
                                     int frame_begin = 0,
                                     int frame_end = 99999,
                                     int frame_step = 1);
+
+std::vector<std::string> getFilesInDirectory(const std::string &directoryPath);
 
 void read_parameters(ros::NodeHandle &nh, ConfigSetting &config_setting);
 
