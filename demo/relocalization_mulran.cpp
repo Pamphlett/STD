@@ -295,7 +295,7 @@ int main(int argc, char **argv) {
 
     ///////////// start retrieval /////////////////
     int success_count = 0;
-    for (; cloudInd < loc_total_size; cloudInd += 5) {
+    for (; cloudInd < loc_total_size; cloudInd += 1) {
         if (cloudInd >= loc_total_size) {
             break;
         }
