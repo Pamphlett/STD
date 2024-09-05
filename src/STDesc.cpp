@@ -1540,15 +1540,15 @@ void STDescManager::candidate_verify(
                 sucess_match_vec.push_back(verify_pair);
             }
         }
-        // verify_score = plane_geometric_verify(
-        //     plane_cloud_vec_.back(),
-        //     plane_cloud_vec_[candidate_matcher.match_id_.second],
-        //     relative_pose);
-
         verify_score = plane_geometric_verify(
-                current_plane_cloud_,
-                plane_cloud_vec_[candidate_matcher.match_id_.second],
-                relative_pose);
+            plane_cloud_vec_.back(),
+            plane_cloud_vec_[candidate_matcher.match_id_.second],
+            relative_pose);
+
+        // verify_score = plane_geometric_verify(
+        //         current_plane_cloud_,
+        //         plane_cloud_vec_[candidate_matcher.match_id_.second],
+        //         relative_pose);
     } else {
         verify_score = -1;
     }
